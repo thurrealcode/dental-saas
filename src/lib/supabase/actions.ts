@@ -59,5 +59,5 @@ export async function createCompany(name: string, slug: string) {
   await supabase.rpc('create_default_appointment_types', { p_company_id: company.id })
 
   revalidatePath('/', 'layout')
-  redirect('/dashboard')
+  return { success: true }
 }

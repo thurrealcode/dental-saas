@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createCompany } from '@/lib/supabase/actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +14,7 @@ export default function OnboardingPage() {
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
   const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
   function handleNameChange(value: string) {
     setName(value)
@@ -30,12 +32,16 @@ export default function OnboardingPage() {
     e.preventDefault()
     if (!name.trim() || !slug.trim()) return
     setLoading(true)
-    try {
-      await createCompany(name.trim(), slug.trim())
-    } catch {
-      toast.error('Erro ao criar clínica. Tente novamente.')
+
+    const result = await createCompany(name.trim(), slug.trim())
+
+    if (result?.error) {
+      toast.error(result.error)
       setLoading(false)
+      return
     }
+
+    router.push('/dashboard')
   }
 
   return (
