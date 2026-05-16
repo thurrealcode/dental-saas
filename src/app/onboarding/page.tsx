@@ -14,6 +14,7 @@ export default function OnboardingPage() {
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const router = useRouter()
 
   function handleNameChange(value: string) {
@@ -32,16 +33,19 @@ export default function OnboardingPage() {
     e.preventDefault()
     if (!name.trim() || !slug.trim()) return
     setLoading(true)
+    setError('')
 
     const result = await createCompany(name.trim(), slug.trim())
 
     if (result?.error) {
+      setError(result.error)
       toast.error(result.error)
       setLoading(false)
       return
     }
 
     router.push('/dashboard')
+    router.refresh()
   }
 
   return (
@@ -97,7 +101,12 @@ export default function OnboardingPage() {
                 <p className="text-xs text-slate-500">Apenas letras minúsculas, números e hífens</p>
               </div>
             </CardContent>
-            <CardFooter>
+            <CardFooter className="flex flex-col gap-3">
+              {error && (
+                <p className="w-full text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                  {error}
+                </p>
+              )}
               <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading || !name || !slug}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Criar minha clínica
