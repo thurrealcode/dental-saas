@@ -13,127 +13,132 @@ export default async function SettingsPage() {
   const { data: { user } } = await supabase.auth.getUser()
 
   const { data: membership } = await supabase
-    .from('company_members')
-    .select('company_id, role, companies(*)')
-    .eq('user_id', user!.id)
-    .eq('is_active', true)
-    .single()
+    .from('company_members').select('company_id, role, companies(*)')
+    .eq('user_id', user!.id).eq('is_active', true).single()
 
   const company = (membership?.companies as unknown as { name: string; slug: string; email: string | null; phone: string | null } | null)
   const companyId = membership?.company_id
 
   const [professionalsRes, proceduresRes] = await Promise.all([
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (supabase as any)
-      .from('professionals')
-      .select('id, name, specialty, color')
-      .eq('company_id', companyId!)
-      .eq('active', true)
-      .order('name'),
+    (supabase as any).from('professionals').select('id, name, specialty, color')
+      .eq('company_id', companyId!).eq('active', true).order('name'),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (supabase as any)
-      .from('procedures')
-      .select('id, name, duration_minutes, price, color')
-      .eq('company_id', companyId!)
-      .eq('active', true)
-      .order('name'),
+    (supabase as any).from('procedures').select('id, name, duration_minutes, price, color')
+      .eq('company_id', companyId!).eq('active', true).order('name'),
   ])
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-4xl">
       <div>
-        <h1 className="text-2xl font-bold text-white">Configurações</h1>
-        <p className="text-slate-400 text-sm mt-1">Gerencie sua clínica e integrações</p>
+        <h1 className="text-2xl font-bold text-gray-900">Configurações</h1>
+        <p className="text-gray-500 text-sm mt-1">Gerencie sua clínica e integrações</p>
       </div>
 
       {/* Company */}
-      <Card className="border-slate-800 bg-slate-900">
-        <CardHeader>
+      <Card className="border-gray-200 bg-white shadow-sm">
+        <CardHeader className="border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-blue-600/20 flex items-center justify-center">
-              <Building2 className="h-4 w-4 text-blue-400" />
+            <div className="h-9 w-9 rounded-lg bg-blue-50 flex items-center justify-center">
+              <Building2 className="h-4 w-4 text-blue-600" />
             </div>
             <div>
-              <CardTitle className="text-white text-base">Dados da Clínica</CardTitle>
-              <CardDescription className="text-slate-500">Informações gerais da empresa</CardDescription>
+              <CardTitle className="text-gray-900 text-base">Dados da Clínica</CardTitle>
+              <CardDescription className="text-gray-400">Informações gerais da empresa</CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-slate-300">Nome da Clínica</Label>
-              <Input defaultValue={company?.name} className="bg-slate-800 border-slate-700 text-white" />
+              <Label className="text-gray-700 text-sm">Nome da Clínica</Label>
+              <Input defaultValue={company?.name} className="bg-white border-gray-200 text-gray-900 focus-visible:ring-blue-500" />
             </div>
             <div className="space-y-2">
-              <Label className="text-slate-300">Slug (URL)</Label>
-              <Input defaultValue={company?.slug} className="bg-slate-800 border-slate-700 text-white" />
+              <Label className="text-gray-700 text-sm">Slug (URL)</Label>
+              <Input defaultValue={company?.slug} className="bg-white border-gray-200 text-gray-900 focus-visible:ring-blue-500" />
             </div>
             <div className="space-y-2">
-              <Label className="text-slate-300">Email</Label>
-              <Input defaultValue={company?.email ?? ''} type="email" className="bg-slate-800 border-slate-700 text-white" />
+              <Label className="text-gray-700 text-sm">Email</Label>
+              <Input defaultValue={company?.email ?? ''} type="email" className="bg-white border-gray-200 text-gray-900 focus-visible:ring-blue-500" />
             </div>
             <div className="space-y-2">
-              <Label className="text-slate-300">Telefone</Label>
-              <Input defaultValue={company?.phone ?? ''} className="bg-slate-800 border-slate-700 text-white" />
+              <Label className="text-gray-700 text-sm">Telefone</Label>
+              <Input defaultValue={company?.phone ?? ''} className="bg-white border-gray-200 text-gray-900 focus-visible:ring-blue-500" />
             </div>
           </div>
-          <Button className="bg-blue-600 hover:bg-blue-700">Salvar alterações</Button>
+          <Button className="bg-blue-600 hover:bg-blue-700 shadow-sm">Salvar alterações</Button>
+        </CardContent>
+      </Card>
+
+      {/* Professionals */}
+      <Card className="border-gray-200 bg-white shadow-sm">
+        <CardHeader className="border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-blue-50 flex items-center justify-center">
+              <UserCog className="h-4 w-4 text-blue-600" />
+            </div>
+            <div>
+              <CardTitle className="text-gray-900 text-base">Profissionais</CardTitle>
+              <CardDescription className="text-gray-400">Dentistas e especialistas da clínica</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-5">
+          <ProfessionalsManager professionals={(professionalsRes.data ?? []) as { id: string; name: string; specialty: string | null; color: string }[]} />
+        </CardContent>
+      </Card>
+
+      {/* Procedures */}
+      <Card className="border-gray-200 bg-white shadow-sm">
+        <CardHeader className="border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-emerald-50 flex items-center justify-center">
+              <Stethoscope className="h-4 w-4 text-emerald-600" />
+            </div>
+            <div>
+              <CardTitle className="text-gray-900 text-base">Procedimentos</CardTitle>
+              <CardDescription className="text-gray-400">Serviços e tratamentos oferecidos</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-5">
+          <ProceduresManager procedures={(proceduresRes.data ?? []) as { id: string; name: string; duration_minutes: number; price: number | null; color: string }[]} />
         </CardContent>
       </Card>
 
       {/* Integrations */}
-      <Card className="border-slate-800 bg-slate-900">
-        <CardHeader>
+      <Card className="border-gray-200 bg-white shadow-sm">
+        <CardHeader className="border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-violet-600/20 flex items-center justify-center">
-              <Puzzle className="h-4 w-4 text-violet-400" />
+            <div className="h-9 w-9 rounded-lg bg-violet-50 flex items-center justify-center">
+              <Puzzle className="h-4 w-4 text-violet-600" />
             </div>
             <div>
-              <CardTitle className="text-white text-base">Integrações</CardTitle>
-              <CardDescription className="text-slate-500">Conecte ferramentas externas</CardDescription>
+              <CardTitle className="text-gray-900 text-base">Integrações</CardTitle>
+              <CardDescription className="text-gray-400">Conecte ferramentas externas</CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3 pt-5">
           {[
-            {
-              name: 'Evolution API',
-              desc: 'WhatsApp Business API',
-              icon: MessageSquare,
-              color: 'text-emerald-400 bg-emerald-500/10',
-              status: 'not_connected',
-            },
-            {
-              name: 'n8n',
-              desc: 'Automação de fluxos',
-              icon: Zap,
-              color: 'text-amber-400 bg-amber-500/10',
-              status: 'not_connected',
-            },
-            {
-              name: 'IA (OpenAI / Claude)',
-              desc: 'Respostas automáticas inteligentes',
-              icon: Bot,
-              color: 'text-blue-400 bg-blue-500/10',
-              status: 'not_connected',
-            },
+            { name: 'Evolution API', desc: 'WhatsApp Business API', icon: MessageSquare, iconClass: 'text-emerald-600 bg-emerald-50' },
+            { name: 'n8n', desc: 'Automação de fluxos', icon: Zap, iconClass: 'text-amber-600 bg-amber-50' },
+            { name: 'IA (OpenAI / Claude)', desc: 'Respostas automáticas inteligentes', icon: Bot, iconClass: 'text-blue-600 bg-blue-50' },
           ].map((integration) => (
-            <div key={integration.name} className="flex items-center justify-between p-4 rounded-lg bg-slate-800/60 border border-slate-700/60">
+            <div key={integration.name} className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-200">
               <div className="flex items-center gap-3">
-                <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${integration.color}`}>
+                <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${integration.iconClass}`}>
                   <integration.icon className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-white">{integration.name}</p>
-                  <p className="text-xs text-slate-500">{integration.desc}</p>
+                  <p className="text-sm font-medium text-gray-900">{integration.name}</p>
+                  <p className="text-xs text-gray-400">{integration.desc}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <Badge variant="outline" className="text-xs border-slate-700 text-slate-500">
-                  Não conectado
-                </Badge>
-                <Button size="sm" variant="outline" className="border-slate-700 text-slate-300 hover:text-white bg-slate-800 text-xs">
+                <Badge variant="outline" className="text-xs border-gray-200 text-gray-400 bg-white">Não conectado</Badge>
+                <Button size="sm" variant="outline" className="border-gray-200 text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-50 text-xs shadow-sm">
                   Configurar
                 </Button>
               </div>
@@ -142,72 +147,34 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Professionals */}
-      <Card className="border-slate-800 bg-slate-900">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-blue-600/20 flex items-center justify-center">
-              <UserCog className="h-4 w-4 text-blue-400" />
-            </div>
-            <div>
-              <CardTitle className="text-white text-base">Profissionais</CardTitle>
-              <CardDescription className="text-slate-500">Dentistas e especialistas da clínica</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <ProfessionalsManager professionals={(professionalsRes.data ?? []) as { id: string; name: string; specialty: string | null; color: string }[]} />
-        </CardContent>
-      </Card>
-
-      {/* Procedures */}
-      <Card className="border-slate-800 bg-slate-900">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-emerald-600/20 flex items-center justify-center">
-              <Stethoscope className="h-4 w-4 text-emerald-400" />
-            </div>
-            <div>
-              <CardTitle className="text-white text-base">Procedimentos</CardTitle>
-              <CardDescription className="text-slate-500">Serviços e tratamentos oferecidos</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <ProceduresManager procedures={(proceduresRes.data ?? []) as { id: string; name: string; duration_minutes: number; price: number | null; color: string }[]} />
-        </CardContent>
-      </Card>
-
       {/* Team */}
-      <Card className="border-slate-800 bg-slate-900">
-        <CardHeader>
+      <Card className="border-gray-200 bg-white shadow-sm">
+        <CardHeader className="border-b border-gray-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-lg bg-emerald-600/20 flex items-center justify-center">
-                <Users className="h-4 w-4 text-emerald-400" />
+              <div className="h-9 w-9 rounded-lg bg-emerald-50 flex items-center justify-center">
+                <Users className="h-4 w-4 text-emerald-600" />
               </div>
               <div>
-                <CardTitle className="text-white text-base">Equipe</CardTitle>
-                <CardDescription className="text-slate-500">Gerencie membros da clínica</CardDescription>
+                <CardTitle className="text-gray-900 text-base">Equipe</CardTitle>
+                <CardDescription className="text-gray-400">Gerencie membros da clínica</CardDescription>
               </div>
             </div>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-xs">Convidar membro</Button>
+            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-xs shadow-sm">Convidar membro</Button>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between py-3 border-b border-slate-800">
+        <CardContent className="pt-4">
+          <div className="flex items-center justify-between py-3">
             <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 text-xs font-bold">
+              <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 text-xs font-bold">
                 {user?.email?.[0].toUpperCase()}
               </div>
               <div>
-                <p className="text-sm font-medium text-white">{user?.email}</p>
-                <p className="text-xs text-slate-500">Você</p>
+                <p className="text-sm font-medium text-gray-900">{user?.email}</p>
+                <p className="text-xs text-gray-400">Você</p>
               </div>
             </div>
-            <Badge variant="outline" className="border-amber-500/40 text-amber-400 bg-amber-500/10 text-xs">
-              Owner
-            </Badge>
+            <Badge variant="outline" className="border-amber-200 text-amber-700 bg-amber-50 text-xs">Owner</Badge>
           </div>
         </CardContent>
       </Card>

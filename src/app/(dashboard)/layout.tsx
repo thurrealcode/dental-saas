@@ -27,13 +27,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const userName = profile?.full_name ?? user.email?.split('@')[0] ?? 'Usuário'
 
   return (
-    <div className="flex h-screen bg-slate-950 overflow-hidden">
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
       <Sidebar
         companyName={companyName}
         userName={userName}
         userEmail={user.email ?? ''}
       />
-      <main className="flex-1 overflow-y-auto bg-slate-950">
+      <main className="flex-1 overflow-y-auto bg-gray-50">
         {children}
       </main>
     </div>

@@ -14,65 +14,25 @@ async function getDashboardStats(companyId: string) {
   const [patients, todayAppointments, openConversations, pipelineCards] = await Promise.all([
     supabase.from('patients').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
     supabase.from('appointments').select('id', { count: 'exact', head: true })
-      .eq('company_id', companyId)
-      .gte('start_at', startOfToday)
-      .lte('start_at', endOfToday),
+      .eq('company_id', companyId).gte('start_at', startOfToday).lte('start_at', endOfToday),
     supabase.from('conversations').select('id', { count: 'exact', head: true })
-      .eq('company_id', companyId)
-      .eq('status', 'open'),
-    supabase.from('pipeline_cards').select('value')
-      .eq('company_id', companyId)
-      .gte('created_at', startOfMonth),
+      .eq('company_id', companyId).eq('status', 'open'),
+    supabase.from('pipeline_cards').select('value').eq('company_id', companyId).gte('created_at', startOfMonth),
   ])
-
-  const pipelineValue = pipelineCards.data?.reduce((sum, c) => sum + (c.value ?? 0), 0) ?? 0
 
   return {
     totalPatients: patients.count ?? 0,
     todayAppointments: todayAppointments.count ?? 0,
     openConversations: openConversations.count ?? 0,
-    pipelineValue,
+    pipelineValue: pipelineCards.data?.reduce((sum, c) => sum + (c.value ?? 0), 0) ?? 0,
   }
 }
 
 const statCards = [
-  {
-    title: 'Total de Pacientes',
-    key: 'totalPatients' as const,
-    icon: Users,
-    color: 'text-blue-400',
-    bgColor: 'bg-blue-500/10',
-    change: '+12%',
-    positive: true,
-  },
-  {
-    title: 'Consultas Hoje',
-    key: 'todayAppointments' as const,
-    icon: CalendarDays,
-    color: 'text-emerald-400',
-    bgColor: 'bg-emerald-500/10',
-    change: '+3',
-    positive: true,
-  },
-  {
-    title: 'Conversas Abertas',
-    key: 'openConversations' as const,
-    icon: MessageSquare,
-    color: 'text-amber-400',
-    bgColor: 'bg-amber-500/10',
-    change: '-5%',
-    positive: false,
-  },
-  {
-    title: 'Pipeline (mês)',
-    key: 'pipelineValue' as const,
-    icon: TrendingUp,
-    color: 'text-violet-400',
-    bgColor: 'bg-violet-500/10',
-    change: '+28%',
-    positive: true,
-    isCurrency: true,
-  },
+  { title: 'Total de Pacientes', key: 'totalPatients' as const, icon: Users, iconColor: 'text-blue-600', iconBg: 'bg-blue-50', change: '+12%', positive: true },
+  { title: 'Consultas Hoje', key: 'todayAppointments' as const, icon: CalendarDays, iconColor: 'text-emerald-600', iconBg: 'bg-emerald-50', change: '+3', positive: true },
+  { title: 'Conversas Abertas', key: 'openConversations' as const, icon: MessageSquare, iconColor: 'text-amber-600', iconBg: 'bg-amber-50', change: '-5%', positive: false },
+  { title: 'Pipeline (mês)', key: 'pipelineValue' as const, icon: TrendingUp, iconColor: 'text-violet-600', iconBg: 'bg-violet-50', change: '+28%', positive: true, isCurrency: true },
 ]
 
 export default async function DashboardPage() {
@@ -102,9 +62,9 @@ export default async function DashboardPage() {
     <div className="flex flex-col gap-6 p-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <p className="text-slate-400 text-sm mt-1">
-          Visão geral da sua clínica — {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-gray-500 text-sm mt-1">
+          {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
       </div>
 
@@ -117,16 +77,16 @@ export default async function DashboardPage() {
             : value.toLocaleString('pt-BR')
 
           return (
-            <Card key={card.key} className="border-slate-800 bg-slate-900">
+            <Card key={card.key} className="border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-slate-400">{card.title}</CardTitle>
-                <div className={cn('rounded-lg p-2', card.bgColor)}>
-                  <card.icon className={cn('h-4 w-4', card.color)} />
+                <CardTitle className="text-sm font-medium text-gray-500">{card.title}</CardTitle>
+                <div className={cn('rounded-lg p-2', card.iconBg)}>
+                  <card.icon className={cn('h-4 w-4', card.iconColor)} />
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold text-white">{displayValue}</p>
-                <div className={cn('flex items-center gap-1 mt-1 text-xs font-medium', card.positive ? 'text-emerald-400' : 'text-red-400')}>
+                <p className="text-2xl font-bold text-gray-900">{displayValue}</p>
+                <div className={cn('flex items-center gap-1 mt-1 text-xs font-medium', card.positive ? 'text-emerald-600' : 'text-red-500')}>
                   {card.positive ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
                   <span>{card.change} vs. mês anterior</span>
                 </div>
@@ -137,37 +97,40 @@ export default async function DashboardPage() {
       </div>
 
       {/* Upcoming Appointments */}
-      <Card className="border-slate-800 bg-slate-900">
-        <CardHeader>
-          <CardTitle className="text-white text-base">Próximas Consultas</CardTitle>
+      <Card className="border-gray-200 bg-white shadow-sm">
+        <CardHeader className="border-b border-gray-100 pb-4">
+          <CardTitle className="text-gray-900 text-base font-semibold">Próximas Consultas</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4">
           {upcomingAppointments && upcomingAppointments.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-1">
               {upcomingAppointments.map((appt) => {
                 const patient = appt.patients as unknown as { full_name: string } | null
                 const startAt = new Date(appt.start_at)
                 return (
-                  <div key={appt.id} className="flex items-center justify-between py-2 border-b border-slate-800 last:border-0">
+                  <div key={appt.id} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 hover:bg-gray-50 rounded-lg px-2 transition-colors cursor-pointer">
                     <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 text-xs font-bold">
+                      <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 text-xs font-bold flex-shrink-0">
                         {patient?.full_name?.[0]?.toUpperCase() ?? '?'}
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-white">{patient?.full_name ?? 'Paciente'}</p>
-                        <p className="text-xs text-slate-500">{appt.title}</p>
+                        <p className="text-sm font-medium text-gray-900">{patient?.full_name ?? 'Paciente'}</p>
+                        <p className="text-xs text-gray-400">{appt.title}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm text-white">{startAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
-                      <p className="text-xs text-slate-500">{startAt.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</p>
+                      <p className="text-sm font-medium text-gray-900">{startAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                      <p className="text-xs text-gray-400">{startAt.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</p>
                     </div>
                   </div>
                 )
               })}
             </div>
           ) : (
-            <p className="text-slate-500 text-sm text-center py-8">Nenhuma consulta agendada</p>
+            <div className="text-center py-10">
+              <CalendarDays className="h-10 w-10 text-gray-200 mx-auto mb-3" />
+              <p className="text-gray-400 text-sm">Nenhuma consulta agendada</p>
+            </div>
           )}
         </CardContent>
       </Card>
