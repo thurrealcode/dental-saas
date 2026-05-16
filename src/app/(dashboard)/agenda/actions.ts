@@ -20,7 +20,7 @@ async function getCompanyId() {
 
 export async function createAppointment(formData: {
   patient_id: string
-  professional_id: string
+  professional_id?: string
   procedure_id?: string
   start_at: string
   end_at: string
@@ -31,25 +31,26 @@ export async function createAppointment(formData: {
   const companyId = await getCompanyId()
   if (!companyId) return { error: 'Não autenticado' }
 
-  // Check for conflicts
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: conflicts } = await (supabase as any).rpc('check_appointment_conflict', {
-    p_company_id: companyId,
-    p_professional_id: formData.professional_id,
-    p_start_time: formData.start_at,
-    p_end_time: formData.end_at,
-  })
-
-  const conflict = (conflicts as Array<{ has_conflict: boolean; conflict_reason: string | null }>)?.[0]
-  if (conflict?.has_conflict) {
-    return { error: conflict.conflict_reason ?? 'Conflito de horário' }
+  // Only check conflicts when a professional is assigned
+  if (formData.professional_id) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: conflicts } = await (supabase as any).rpc('check_appointment_conflict', {
+      p_company_id: companyId,
+      p_professional_id: formData.professional_id,
+      p_start_time: formData.start_at,
+      p_end_time: formData.end_at,
+    })
+    const conflict = (conflicts as Array<{ has_conflict: boolean; conflict_reason: string | null }>)?.[0]
+    if (conflict?.has_conflict) {
+      return { error: conflict.conflict_reason ?? 'Conflito de horário' }
+    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any).from('appointments').insert({
     company_id: companyId,
     patient_id: formData.patient_id,
-    professional_id: formData.professional_id,
+    professional_id: formData.professional_id || null,
     procedure_id: formData.procedure_id || null,
     start_at: formData.start_at,
     end_at: formData.end_at,
