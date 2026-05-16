@@ -22,11 +22,11 @@ import { signOut } from '@/lib/supabase/actions'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/dashboard/patients', label: 'Pacientes', icon: Users },
-  { href: '/dashboard/agenda', label: 'Agenda', icon: CalendarDays },
-  { href: '/dashboard/pipeline', label: 'Pipeline', icon: KanbanSquare },
-  { href: '/dashboard/conversations', label: 'Conversas', icon: MessageSquare, badge: 3 },
-  { href: '/dashboard/settings', label: 'Configurações', icon: Settings },
+  { href: '/patients', label: 'Pacientes', icon: Users },
+  { href: '/agenda', label: 'Agenda', icon: CalendarDays },
+  { href: '/pipeline', label: 'Pipeline', icon: KanbanSquare },
+  { href: '/conversations', label: 'Conversas', icon: MessageSquare, badge: 3 },
+  { href: '/settings', label: 'Configurações', icon: Settings },
 ]
 
 interface SidebarProps {
