@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Building2, Users, Puzzle, Bell, Zap, MessageSquare, Bot } from 'lucide-react'
+import { Building2, Users, Puzzle, Zap, MessageSquare, Bot, Stethoscope, UserCog } from 'lucide-react'
+import { ProfessionalsManager } from './professionals-manager'
+import { ProceduresManager } from './procedures-manager'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -18,6 +20,24 @@ export default async function SettingsPage() {
     .single()
 
   const company = (membership?.companies as unknown as { name: string; slug: string; email: string | null; phone: string | null } | null)
+  const companyId = membership?.company_id
+
+  const [professionalsRes, proceduresRes] = await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from('professionals')
+      .select('id, name, specialty, color')
+      .eq('company_id', companyId!)
+      .eq('active', true)
+      .order('name'),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from('procedures')
+      .select('id, name, duration_minutes, price, color')
+      .eq('company_id', companyId!)
+      .eq('active', true)
+      .order('name'),
+  ])
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-4xl">
@@ -119,6 +139,42 @@ export default async function SettingsPage() {
               </div>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      {/* Professionals */}
+      <Card className="border-slate-800 bg-slate-900">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-blue-600/20 flex items-center justify-center">
+              <UserCog className="h-4 w-4 text-blue-400" />
+            </div>
+            <div>
+              <CardTitle className="text-white text-base">Profissionais</CardTitle>
+              <CardDescription className="text-slate-500">Dentistas e especialistas da clínica</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ProfessionalsManager professionals={(professionalsRes.data ?? []) as { id: string; name: string; specialty: string | null; color: string }[]} />
+        </CardContent>
+      </Card>
+
+      {/* Procedures */}
+      <Card className="border-slate-800 bg-slate-900">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-emerald-600/20 flex items-center justify-center">
+              <Stethoscope className="h-4 w-4 text-emerald-400" />
+            </div>
+            <div>
+              <CardTitle className="text-white text-base">Procedimentos</CardTitle>
+              <CardDescription className="text-slate-500">Serviços e tratamentos oferecidos</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ProceduresManager procedures={(proceduresRes.data ?? []) as { id: string; name: string; duration_minutes: number; price: number | null; color: string }[]} />
         </CardContent>
       </Card>
 
