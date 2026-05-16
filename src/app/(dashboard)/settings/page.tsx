@@ -4,9 +4,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Building2, Users, Puzzle, Zap, MessageSquare, Bot, Stethoscope, UserCog } from 'lucide-react'
+import { Building2, Users, Puzzle, Zap, MessageSquare, Bot, Stethoscope, UserCog, Lock } from 'lucide-react'
 import { ProfessionalsManager } from './professionals-manager'
 import { ProceduresManager } from './procedures-manager'
+import { getSetupStatus } from '../setup/actions'
+import Link from 'next/link'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -18,6 +20,8 @@ export default async function SettingsPage() {
 
   const company = (membership?.companies as unknown as { name: string; slug: string; email: string | null; phone: string | null } | null)
   const companyId = membership?.company_id
+
+  const setupStatus = await getSetupStatus()
 
   const [professionalsRes, proceduresRes] = await Promise.all([
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -121,8 +125,38 @@ export default async function SettingsPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3 pt-5">
+          {/* WhatsApp / Evolution API */}
+          <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-200">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-lg flex items-center justify-center text-emerald-600 bg-emerald-50">
+                <MessageSquare className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">Evolution API</p>
+                <p className="text-xs text-gray-400">WhatsApp Business API</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {setupStatus?.is_ready ? (
+                <>
+                  <Badge variant="outline" className="text-xs border-gray-200 text-gray-400 bg-white">Não conectado</Badge>
+                  <Button size="sm" variant="outline" className="border-gray-200 text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-50 text-xs shadow-sm">
+                    Configurar
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Lock className="h-3.5 w-3.5 text-gray-300" />
+                  <Link href="/setup">
+                    <Button size="sm" variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-50 bg-white text-xs shadow-sm gap-1.5">
+                      Completar configuração
+                    </Button>
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
           {[
-            { name: 'Evolution API', desc: 'WhatsApp Business API', icon: MessageSquare, iconClass: 'text-emerald-600 bg-emerald-50' },
             { name: 'n8n', desc: 'Automação de fluxos', icon: Zap, iconClass: 'text-amber-600 bg-amber-50' },
             { name: 'IA (OpenAI / Claude)', desc: 'Respostas automáticas inteligentes', icon: Bot, iconClass: 'text-blue-600 bg-blue-50' },
           ].map((integration) => (

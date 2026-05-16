@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Users, CalendarDays, TrendingUp, MessageSquare, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { Users, CalendarDays, TrendingUp, MessageSquare, ArrowUpRight, ArrowDownRight, CheckCircle2, Circle, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getSetupStatus } from '../setup/actions'
+import Link from 'next/link'
 
 async function getDashboardStats(companyId: string) {
   const supabase = await createClient()
@@ -48,7 +50,10 @@ export default async function DashboardPage() {
 
   if (!membership) return null
 
-  const stats = await getDashboardStats(membership.company_id)
+  const [stats, setupStatus] = await Promise.all([
+    getDashboardStats(membership.company_id),
+    getSetupStatus(),
+  ])
 
   const { data: upcomingAppointments } = await supabase
     .from('appointments')
@@ -95,6 +100,49 @@ export default async function DashboardPage() {
           )
         })}
       </div>
+
+      {/* Setup Checklist */}
+      {setupStatus && !setupStatus.is_ready && (
+        <Card className="border-amber-200 bg-amber-50 shadow-sm">
+          <CardHeader className="border-b border-amber-100 pb-4">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0" />
+              <div>
+                <CardTitle className="text-amber-900 text-base font-semibold">Configure sua clínica</CardTitle>
+                <p className="text-amber-700 text-xs mt-0.5">Complete os passos abaixo para ativar o bot de atendimento</p>
+              </div>
+              <Link href="/setup" className="ml-auto text-xs font-medium text-amber-700 hover:text-amber-900 underline underline-offset-2 flex-shrink-0">
+                Continuar configuração →
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {[
+                { label: 'Dados da clínica', done: setupStatus.clinic_configured },
+                { label: 'Procedimentos cadastrados', done: setupStatus.procedures_configured },
+                { label: 'Profissionais cadastrados', done: setupStatus.professionals_configured },
+                { label: 'Procedimentos vinculados', done: setupStatus.procedures_linked },
+                { label: 'Disponibilidade configurada', done: setupStatus.availability_configured },
+                { label: 'WhatsApp conectado', done: setupStatus.whatsapp_connected },
+              ].map((item) => (
+                <div key={item.label} className="flex items-center gap-2.5">
+                  {item.done
+                    ? <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+                    : <Circle className="h-4 w-4 text-amber-300 flex-shrink-0" />}
+                  <span className={cn('text-sm', item.done ? 'text-gray-500 line-through' : 'text-amber-900')}>{item.label}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {setupStatus?.is_ready && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200">
+          <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0" />
+          <span className="text-sm font-medium text-emerald-800">Bot pronto para ativar — todas as configurações estão completas!</span>
+        </div>
+      )}
 
       {/* Upcoming Appointments */}
       <Card className="border-gray-200 bg-white shadow-sm">
