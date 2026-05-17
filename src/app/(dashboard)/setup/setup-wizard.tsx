@@ -289,8 +289,13 @@ export function SetupWizard({ company, procedures: initProcs, professionals: ini
                     </div>
                   </div>
                 </div>
+                {!clinicPhone.trim() && !clinicEmail.trim() && (
+                  <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    Informe pelo menos telefone ou e-mail para o bot conseguir identificar sua clínica.
+                  </p>
+                )}
                 <div className="flex justify-end pt-2">
-                  <Button onClick={handleStep1} disabled={loading || !clinicName.trim()} className="bg-blue-600 hover:bg-blue-700 shadow-sm">
+                  <Button onClick={handleStep1} disabled={loading || !clinicName.trim() || (!clinicPhone.trim() && !clinicEmail.trim())} className="bg-blue-600 hover:bg-blue-700 shadow-sm">
                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Próximo →
                   </Button>
