@@ -9,6 +9,7 @@ import { ProfessionalsManager } from './professionals-manager'
 import { ProceduresManager } from './procedures-manager'
 import { getSetupStatus } from '../setup/actions'
 import Link from 'next/link'
+import { WhatsAppConnectButton } from './whatsapp-connect-button'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -22,6 +23,14 @@ export default async function SettingsPage() {
   const companyId = membership?.company_id
 
   const setupStatus = await getSetupStatus()
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: waIntegration } = await (supabase as any)
+    .from('integrations')
+    .select('is_active')
+    .eq('company_id', companyId!)
+    .eq('type', 'whatsapp')
+    .maybeSingle()
 
   const [professionalsRes, proceduresRes] = await Promise.all([
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -138,12 +147,7 @@ export default async function SettingsPage() {
             </div>
             <div className="flex items-center gap-3">
               {setupStatus?.is_ready ? (
-                <>
-                  <Badge variant="outline" className="text-xs border-gray-200 text-gray-400 bg-white">Não conectado</Badge>
-                  <Button size="sm" variant="outline" className="border-gray-200 text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-50 text-xs shadow-sm">
-                    Configurar
-                  </Button>
-                </>
+                <WhatsAppConnectButton initialConnected={waIntegration?.is_active ?? false} />
               ) : (
                 <>
                   <Lock className="h-3.5 w-3.5 text-gray-300" />
