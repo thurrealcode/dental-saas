@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createRouteClient, getCompanyId } from '@/lib/supabase/route-client'
-import { createInstance, makeInstanceName } from '@/lib/evolution/client'
+import { createInstance, deleteInstance, getQR, makeInstanceName } from '@/lib/evolution/client'
 
 export async function POST() {
   try {
@@ -30,8 +30,22 @@ export async function POST() {
       })
     }
 
-    // Create instance on Evolution API
-    const result = await createInstance(instanceName, webhookUrl)
+    // Create instance on Evolution API — delete first if it already exists
+    let result = await createInstance(instanceName, webhookUrl).catch(async (err: Error) => {
+      if (err.message.includes('already')) {
+        await deleteInstance(instanceName).catch(() => {})
+        return createInstance(instanceName, webhookUrl)
+      }
+      throw err
+    })
+
+    // If create returned no QR (can happen), fetch it explicitly
+    if (!result.qrcode?.base64) {
+      const qrData = await getQR(instanceName).catch(() => null)
+      if (qrData?.base64) {
+        result = { ...result, qrcode: { code: qrData.code, base64: qrData.base64 } }
+      }
+    }
 
     const config = {
       instance_name: instanceName,

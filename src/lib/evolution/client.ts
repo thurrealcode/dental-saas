@@ -11,6 +11,11 @@ function headers() {
   return { 'Content-Type': 'application/json', apikey: API_KEY }
 }
 
+function stripDataUri(b64: string | null | undefined): string | null {
+  if (!b64) return null
+  return b64.replace(/^data:[^;]+;base64,/, '')
+}
+
 export async function createInstance(instanceName: string, webhookUrl: string) {
   const res = await fetch(`${BASE_URL}/instance/create`, {
     method: 'POST',
@@ -29,10 +34,14 @@ export async function createInstance(instanceName: string, webhookUrl: string) {
     }),
   })
   if (!res.ok) throw new Error(`Evolution create-instance failed: ${res.status}`)
-  return res.json() as Promise<{
+  const data = await res.json() as {
     instance: { instanceName: string; instanceId: string; status: string }
     qrcode: { code: string; base64: string } | null
-  }>
+  }
+  if (data.qrcode?.base64) {
+    data.qrcode.base64 = stripDataUri(data.qrcode.base64) ?? data.qrcode.base64
+  }
+  return data
 }
 
 export async function getQR(instanceName: string) {
@@ -41,7 +50,9 @@ export async function getQR(instanceName: string) {
     next: { revalidate: 0 },
   })
   if (!res.ok) throw new Error(`Evolution connect failed: ${res.status}`)
-  return res.json() as Promise<{ code: string; base64: string; count: number }>
+  const data = await res.json() as { code: string; base64: string; count: number }
+  data.base64 = stripDataUri(data.base64) ?? data.base64
+  return data
 }
 
 export async function getConnectionState(instanceName: string) {
