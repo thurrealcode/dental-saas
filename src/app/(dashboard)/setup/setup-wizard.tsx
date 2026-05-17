@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -90,6 +90,69 @@ export function SetupWizard({ company, procedures: initProcs, professionals: ini
     }
     return map
   })
+
+  // Step 6 state: WhatsApp connect flow
+  type WaState = 'idle' | 'connecting' | 'qr' | 'connected' | 'error'
+  const [waState, setWaState] = useState<WaState>('idle')
+  const [qrBase64, setQrBase64] = useState<string | null>(null)
+  const [waError, setWaError] = useState<string | null>(null)
+  const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const qrRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const stopTimers = useCallback(() => {
+    if (statusPollRef.current) { clearInterval(statusPollRef.current); statusPollRef.current = null }
+    if (qrRefreshRef.current) { clearTimeout(qrRefreshRef.current); qrRefreshRef.current = null }
+  }, [])
+
+  useEffect(() => () => stopTimers(), [stopTimers])
+
+  const scheduleQrRefresh = useCallback(() => {
+    qrRefreshRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/whatsapp/qr')
+        if (res.ok) {
+          const data = await res.json()
+          if (data.qr) setQrBase64(data.qr)
+        }
+      } catch { /* ignore */ }
+      scheduleQrRefresh()
+    }, 40_000)
+  }, [])
+
+  const startStatusPoll = useCallback(() => {
+    statusPollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch('/api/whatsapp/status')
+        if (!res.ok) return
+        const data = await res.json()
+        if (data.state === 'open') {
+          stopTimers()
+          setWaState('connected')
+        }
+      } catch { /* ignore */ }
+    }, 3_000)
+  }, [stopTimers])
+
+  async function handleConnectWhatsApp() {
+    setWaState('connecting')
+    setWaError(null)
+    try {
+      const res = await fetch('/api/whatsapp/create-instance', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Erro ao criar instância')
+      if (data.status === 'already_connected') {
+        setWaState('connected')
+        return
+      }
+      setQrBase64(data.qr ?? null)
+      setWaState('qr')
+      startStatusPoll()
+      scheduleQrRefresh()
+    } catch (e) {
+      setWaError(e instanceof Error ? e.message : 'Erro desconhecido')
+      setWaState('error')
+    }
+  }
 
   // ── Step 1 ──────────────────────────────────────────────
   async function handleStep1() {
@@ -601,24 +664,80 @@ export function SetupWizard({ company, procedures: initProcs, professionals: ini
                   </div>
                 </div>
 
-                <div className="rounded-xl bg-gray-50 border border-gray-200 p-5 text-center space-y-4">
-                  <div className="h-14 w-14 rounded-2xl bg-emerald-100 flex items-center justify-center mx-auto">
-                    <Wifi className="h-7 w-7 text-emerald-600" />
+                {/* WhatsApp connect states */}
+                {waState === 'idle' && (
+                  <div className="rounded-xl bg-gray-50 border border-gray-200 p-5 text-center space-y-4">
+                    <div className="h-14 w-14 rounded-2xl bg-emerald-100 flex items-center justify-center mx-auto">
+                      <Wifi className="h-7 w-7 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">WhatsApp Business</p>
+                      <p className="text-sm text-gray-500 mt-1">Conecte seu número para ativar o bot de agendamento automático via WhatsApp.</p>
+                    </div>
+                    <Button onClick={handleConnectWhatsApp} className="bg-emerald-600 hover:bg-emerald-700 gap-2 shadow-sm">
+                      <Wifi className="h-4 w-4" />
+                      Conectar WhatsApp
+                    </Button>
                   </div>
-                  <div>
-                    <p className="font-semibold text-gray-900">WhatsApp Business</p>
-                    <p className="text-sm text-gray-500 mt-1">Configure a integração com Evolution API para ativar o bot de agendamento automático</p>
+                )}
+
+                {waState === 'connecting' && (
+                  <div className="rounded-xl bg-gray-50 border border-gray-200 p-8 text-center space-y-3">
+                    <Loader2 className="h-10 w-10 animate-spin text-emerald-600 mx-auto" />
+                    <p className="text-sm text-gray-500">Criando instância WhatsApp...</p>
                   </div>
-                  <Button onClick={() => router.push('/settings')} className="bg-emerald-600 hover:bg-emerald-700 gap-2 shadow-sm">
-                    <Wifi className="h-4 w-4" />
-                    Ir para Configurações → WhatsApp
-                  </Button>
-                </div>
+                )}
+
+                {waState === 'qr' && (
+                  <div className="rounded-xl bg-gray-50 border border-gray-200 p-5 text-center space-y-4">
+                    <p className="text-sm font-semibold text-gray-700">Escaneie o QR Code com o WhatsApp Business</p>
+                    {qrBase64 ? (
+                      <img
+                        src={`data:image/png;base64,${qrBase64}`}
+                        alt="QR Code WhatsApp"
+                        className="mx-auto rounded-lg border border-gray-200"
+                        width={240}
+                        height={240}
+                      />
+                    ) : (
+                      <div className="h-60 w-60 mx-auto rounded-lg bg-gray-200 flex items-center justify-center">
+                        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                      </div>
+                    )}
+                    <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Aguardando conexão... (QR atualiza a cada 40s)
+                    </div>
+                  </div>
+                )}
+
+                {waState === 'connected' && (
+                  <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-6 text-center space-y-3">
+                    <CheckCircle2 className="h-12 w-12 text-emerald-600 mx-auto" />
+                    <div>
+                      <p className="font-semibold text-emerald-900 text-lg">Bot ativo!</p>
+                      <p className="text-sm text-emerald-700 mt-1">WhatsApp conectado com sucesso. O bot de agendamento já está funcionando.</p>
+                    </div>
+                  </div>
+                )}
+
+                {waState === 'error' && (
+                  <div className="rounded-xl bg-red-50 border border-red-200 p-5 text-center space-y-3">
+                    <p className="text-sm font-semibold text-red-800">Erro ao conectar</p>
+                    <p className="text-xs text-red-600">{waError}</p>
+                    <Button variant="outline" onClick={handleConnectWhatsApp} className="border-red-300 text-red-700 hover:bg-red-50">
+                      Tentar novamente
+                    </Button>
+                  </div>
+                )}
 
                 <div className="flex justify-between">
-                  <Button variant="outline" onClick={() => setStep(5)} className="border-gray-200 text-gray-600 hover:bg-gray-50">← Voltar</Button>
-                  <Button onClick={() => router.push('/dashboard')} className="bg-blue-600 hover:bg-blue-700 shadow-sm">
-                    Ir para o Dashboard →
+                  <Button variant="outline" onClick={() => setStep(5)} disabled={waState === 'connecting'} className="border-gray-200 text-gray-600 hover:bg-gray-50">← Voltar</Button>
+                  <Button
+                    onClick={() => { stopTimers(); router.push('/dashboard') }}
+                    className="bg-blue-600 hover:bg-blue-700 shadow-sm"
+                  >
+                    {waState === 'connected' ? 'Ir para o Dashboard →' : 'Pular por agora →'}
                   </Button>
                 </div>
               </CardContent>
