@@ -3,8 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import {
-  Plus, ChevronLeft, ChevronRight, Clock, Stethoscope,
-  CalendarDays, Users, CheckCheck,
+  Plus, ChevronLeft, ChevronRight, Stethoscope, CalendarDays,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
@@ -46,9 +45,6 @@ interface Props {
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const HOURS = Array.from({ length: 13 }, (_, i) => i + 7) // 07 → 19
-const HOUR_H = 80 // px per hour row
-
 const MONTH_NAMES = [
   'Janeiro','Fevereiro','Março','Abril','Maio','Junho',
   'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro',
@@ -62,10 +58,6 @@ function formatDateParam(d: Date) { return d.toISOString().slice(0, 10) }
 function parseLocalDate(s: string) {
   const [y, m, d] = s.split('-').map(Number)
   return new Date(y, m - 1, d)
-}
-
-function initials(name: string) {
-  return name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()
 }
 
 function useNow() {
@@ -90,12 +82,12 @@ function MiniCalendar({
   const today    = new Date()
 
   const [viewYear,  setViewYear]  = useState(selected.getFullYear())
-  const [viewMonth, setViewMonth] = useState(selected.getMonth()) // 0-indexed
+  const [viewMonth, setViewMonth] = useState(selected.getMonth())
   const [dotDays,   setDotDays]   = useState<number[]>([])
-  const [dotLoading, setDotLoading] = useState(false)
+  const [loading,   setLoading]   = useState(false)
   const prevDateRef = useRef(selectedDate)
 
-  // Sync view month/year when selectedDate changes from outside (header prev/next)
+  // Sync view when selectedDate changes via header nav
   useEffect(() => {
     if (selectedDate !== prevDateRef.current) {
       const d = parseLocalDate(selectedDate)
@@ -105,14 +97,14 @@ function MiniCalendar({
     }
   }, [selectedDate])
 
-  // Fetch appointment dots for the current view month
+  // Fetch dots for view month
   useEffect(() => {
     let cancelled = false
-    setDotLoading(true)
+    setLoading(true)
     fetch(`/api/appointments/dates?year=${viewYear}&month=${viewMonth + 1}`)
       .then(r => r.json())
-      .then(json => { if (!cancelled) { setDotDays(json.dates ?? []); setDotLoading(false) } })
-      .catch(() => { if (!cancelled) setDotLoading(false) })
+      .then(json => { if (!cancelled) { setDotDays(json.dates ?? []); setLoading(false) } })
+      .catch(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [viewYear, viewMonth])
 
@@ -125,7 +117,6 @@ function MiniCalendar({
     else setViewMonth(m => m + 1)
   }
 
-  // Build day grid
   const firstDow  = new Date(viewYear, viewMonth, 1).getDay()
   const totalDays = new Date(viewYear, viewMonth + 1, 0).getDate()
   const cells: (number | null)[] = []
@@ -134,54 +125,47 @@ function MiniCalendar({
   while (cells.length % 7 !== 0) cells.push(null)
 
   return (
-    <div className="rounded-xl bg-white border border-gray-100 shadow-sm overflow-hidden">
-      {/* Month nav */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
+    <div>
+      {/* Month navigation */}
+      <div className="flex items-center justify-between mb-4">
         <button
           onClick={prevMonth}
-          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" />
+          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors">
+          <ChevronLeft className="h-4 w-4" />
         </button>
-        <span className={cn(
-          'text-sm font-semibold text-gray-800 select-none transition-opacity',
-          dotLoading && 'opacity-50',
-        )}>
+        <span className={cn('text-sm font-bold text-gray-800 select-none', loading && 'opacity-40')}>
           {MONTH_NAMES[viewMonth]} {viewYear}
         </span>
         <button
           onClick={nextMonth}
-          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
-        >
-          <ChevronRight className="h-3.5 w-3.5" />
+          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors">
+          <ChevronRight className="h-4 w-4" />
         </button>
       </div>
 
       {/* Weekday labels */}
-      <div className="grid grid-cols-7 px-3 pt-2.5 pb-1">
+      <div className="grid grid-cols-7 mb-1.5">
         {DAY_LABELS.map((l, i) => (
-          <div key={i} className="flex items-center justify-center h-5">
-            <span className="text-[10px] font-semibold text-gray-400 uppercase">{l}</span>
+          <div key={i} className="flex items-center justify-center h-6">
+            <span className="text-[11px] font-semibold text-gray-400 uppercase">{l}</span>
           </div>
         ))}
       </div>
 
-      {/* Day cells */}
-      <div className="grid grid-cols-7 px-3 pb-3 gap-y-0.5">
+      {/* Day grid */}
+      <div className="grid grid-cols-7 gap-y-0.5">
         {cells.map((day, idx) => {
-          if (!day) return <div key={idx} className="h-8" />
+          if (!day) return <div key={idx} className="h-9" />
 
           const isSelected =
             day === selected.getDate() &&
             viewMonth === selected.getMonth() &&
             viewYear  === selected.getFullYear()
-
           const isToday =
             day === today.getDate() &&
             viewMonth === today.getMonth() &&
             viewYear  === today.getFullYear()
-
-          const hasDot = dotDays.includes(day)
+          const hasDot  = dotDays.includes(day)
           const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 
           return (
@@ -189,18 +173,16 @@ function MiniCalendar({
               key={idx}
               onClick={() => onSelect(dateStr)}
               className={cn(
-                'relative flex flex-col items-center justify-center h-8 rounded-lg text-xs font-medium transition-all duration-150',
-                isSelected
-                  ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700'
-                  : isToday
-                    ? 'bg-blue-50 text-blue-600 font-bold hover:bg-blue-100'
-                    : 'text-gray-700 hover:bg-gray-100',
+                'relative flex flex-col items-center justify-center h-9 rounded-xl text-sm font-medium transition-all duration-150',
+                isSelected && 'bg-blue-600 text-white shadow-sm hover:bg-blue-700',
+                !isSelected && isToday && 'bg-blue-50 text-blue-600 font-bold hover:bg-blue-100',
+                !isSelected && !isToday && 'text-gray-700 hover:bg-gray-100',
               )}
             >
               {day}
               {hasDot && (
                 <span className={cn(
-                  'absolute bottom-0.5 w-1 h-1 rounded-full',
+                  'absolute bottom-1 w-1 h-1 rounded-full',
                   isSelected ? 'bg-white/60' : 'bg-emerald-500',
                 )} />
               )}
@@ -212,79 +194,9 @@ function MiniCalendar({
   )
 }
 
-// ── Day summary ────────────────────────────────────────────────────────────────
+// ── Large CRM-style appointment card ──────────────────────────────────────────
 
-function DaySummary({
-  appointments,
-  selectedDate,
-}: {
-  appointments: Appointment[]
-  selectedDate: string
-}) {
-  const total     = appointments.length
-  const confirmed = appointments.filter(a => a.status === 'confirmed').length
-  const completed = appointments.filter(a => a.status === 'completed').length
-  const cancelled = appointments.filter(a => a.status === 'cancelled').length
-  const active    = appointments.filter(a => a.status !== 'cancelled' && a.status !== 'no_show').length
-  const confirmRate = active > 0 ? Math.round((confirmed / active) * 100) : 0
-
-  const date = parseLocalDate(selectedDate)
-  const dateLabel = date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
-
-  if (total === 0) {
-    return (
-      <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-4 text-center">
-        <CalendarDays className="h-5 w-5 text-gray-300 mx-auto mb-2" />
-        <p className="text-xs text-gray-400">Sem consultas neste dia</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Resumo do dia</p>
-        <span className="text-[11px] text-gray-400 tabular-nums">{dateLabel}</span>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        {([
-          { label: 'Total',        value: total,     color: 'text-gray-900' },
-          { label: 'Confirmadas',  value: confirmed, color: 'text-emerald-600' },
-          { label: 'Concluídas',   value: completed, color: 'text-slate-500' },
-          { label: 'Canceladas',   value: cancelled, color: 'text-red-500' },
-        ] as const).map(({ label, value, color }) => (
-          <div key={label} className="bg-gray-50 rounded-lg p-2.5">
-            <p className="text-[10px] text-gray-400 font-medium">{label}</p>
-            <p className={cn('text-xl font-bold tabular-nums leading-none mt-0.5', color)}>{value}</p>
-          </div>
-        ))}
-      </div>
-
-      {active > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="flex items-center gap-1.5 text-[11px] text-gray-500">
-              <CheckCheck className="h-3 w-3 text-emerald-500" />
-              Taxa de confirmação
-            </span>
-            <span className="text-xs font-bold text-gray-900">{confirmRate}%</span>
-          </div>
-          <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-emerald-500 transition-all duration-700"
-              style={{ width: `${confirmRate}%` }}
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Appointment card ───────────────────────────────────────────────────────────
-
-function ApptCard({
+function BigApptCard({
   appt, updatingId, onStatusChange,
 }: {
   appt: Appointment
@@ -301,75 +213,89 @@ function ApptCard({
   const isUpdating = updatingId === appt.id
 
   return (
-    <div className="group relative rounded-xl border border-gray-100 bg-white shadow-sm hover:shadow-md hover:-translate-y-px transition-all duration-200 overflow-hidden">
-      {/* Professional color bar */}
-      <div className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: prof?.color ?? '#3B82F6' }} />
+    <div className="flex gap-5 items-stretch">
+      {/* Time column */}
+      <div className="w-14 flex-shrink-0 flex flex-col items-end pt-4 select-none">
+        <span className="text-sm font-bold font-mono text-gray-700 tabular-nums leading-none">{startStr}</span>
+        <span className="text-[11px] text-gray-400 mt-1.5">{duration}min</span>
+      </div>
 
-      <div className="pl-4 pr-3 py-3">
-        <div className="flex items-start gap-3">
-          <div className="flex-1 min-w-0">
-            {/* Time + status pill */}
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span className="text-[11px] font-mono text-gray-400 tabular-nums tracking-tight">
-                {startStr} – {endStr}
-              </span>
-              <span className={cn(
-                'inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border',
-                st.pill,
-              )}>
-                <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', st.dot)} />
-                {st.label}
-              </span>
+      {/* Card */}
+      <div className="flex-1 relative rounded-2xl border border-gray-100 bg-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
+        {/* Professional color stripe */}
+        <div
+          className="absolute inset-y-0 left-0 w-1 rounded-l-2xl"
+          style={{ backgroundColor: prof?.color ?? '#3B82F6' }}
+        />
+
+        <div className="pl-5 pr-4 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+
+              {/* Status + time range */}
+              <div className="flex items-center gap-2.5 mb-2.5 flex-wrap">
+                <span className={cn(
+                  'inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border',
+                  st.pill,
+                )}>
+                  <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', st.dot)} />
+                  {st.label}
+                </span>
+                <span className="text-xs text-gray-400 font-mono tabular-nums">{startStr} – {endStr}</span>
+              </div>
+
+              {/* Patient name */}
+              <h3 className="text-[17px] font-bold text-gray-900 leading-tight truncate">
+                {patient?.full_name ?? '—'}
+              </h3>
+
+              {/* Procedure + professional */}
+              <div className="flex items-center gap-5 mt-2.5 flex-wrap">
+                {procedure && (
+                  <span className="flex items-center gap-1.5 text-sm text-gray-500">
+                    <Stethoscope className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                    {procedure.name}
+                  </span>
+                )}
+                {prof && (
+                  <span className="flex items-center gap-1.5 text-sm text-gray-500">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: prof.color }}
+                    />
+                    {prof.name}
+                  </span>
+                )}
+              </div>
             </div>
 
-            {/* Patient */}
-            <p className="text-sm font-semibold text-gray-900 truncate leading-snug">
-              {patient?.full_name ?? '—'}
-            </p>
-
-            {/* Meta row */}
-            <div className="flex flex-wrap items-center gap-3 mt-1.5">
-              {procedure && (
-                <span className="flex items-center gap-1 text-[11px] text-gray-500">
-                  <Stethoscope className="h-3 w-3 text-gray-400" />
-                  {procedure.name}
-                </span>
+            {/* Action buttons — always visible (CRM style) */}
+            <div className="flex-shrink-0 flex flex-col gap-1.5 pt-0.5">
+              {appt.status === 'scheduled' && (
+                <button
+                  onClick={() => onStatusChange(appt.id, 'confirmed')}
+                  disabled={isUpdating}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 font-semibold transition-colors whitespace-nowrap">
+                  ✓ Confirmar
+                </button>
               )}
-              {prof && (
-                <span className="flex items-center gap-1 text-[11px] text-gray-500">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: prof.color }} />
-                  {prof.name}
-                </span>
+              {(appt.status === 'scheduled' || appt.status === 'confirmed' || appt.status === 'in_progress') && (
+                <button
+                  onClick={() => onStatusChange(appt.id, 'completed')}
+                  disabled={isUpdating}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 font-semibold transition-colors whitespace-nowrap">
+                  Concluir
+                </button>
               )}
-              <span className="flex items-center gap-1 text-[11px] text-gray-400">
-                <Clock className="h-3 w-3" />{duration}min
-              </span>
+              {appt.status !== 'cancelled' && appt.status !== 'completed' && appt.status !== 'no_show' && (
+                <button
+                  onClick={() => onStatusChange(appt.id, 'cancelled')}
+                  disabled={isUpdating}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 border border-red-200 font-semibold transition-colors whitespace-nowrap">
+                  Cancelar
+                </button>
+              )}
             </div>
-          </div>
-
-          {/* Hover actions */}
-          <div className="flex-shrink-0 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-            {appt.status === 'scheduled' && (
-              <button
-                onClick={() => onStatusChange(appt.id, 'confirmed')} disabled={isUpdating}
-                className="text-[10px] px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors font-medium whitespace-nowrap">
-                ✓ Confirmar
-              </button>
-            )}
-            {(appt.status === 'scheduled' || appt.status === 'confirmed' || appt.status === 'in_progress') && (
-              <button
-                onClick={() => onStatusChange(appt.id, 'completed')} disabled={isUpdating}
-                className="text-[10px] px-2 py-1 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200 transition-colors font-medium whitespace-nowrap">
-                Concluir
-              </button>
-            )}
-            {appt.status !== 'cancelled' && appt.status !== 'completed' && appt.status !== 'no_show' && (
-              <button
-                onClick={() => onStatusChange(appt.id, 'cancelled')} disabled={isUpdating}
-                className="text-[10px] px-2 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 transition-colors font-medium whitespace-nowrap">
-                Cancelar
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -381,9 +307,9 @@ function ApptCard({
 
 export function AgendaClient({ appointments, patients, professionals, procedures, selectedDate }: Props) {
   const router = useRouter()
-  const [modalOpen,       setModalOpen]       = useState(false)
-  const [selectedProfId,  setSelectedProfId]  = useState<string | undefined>()
-  const [updatingId,      setUpdatingId]      = useState<string | null>(null)
+  const [modalOpen,      setModalOpen]      = useState(false)
+  const [selectedProfId, setSelectedProfId] = useState<string | undefined>()
+  const [updatingId,     setUpdatingId]     = useState<string | null>(null)
   const now         = useNow()
   const currentDate = parseLocalDate(selectedDate)
   const isToday     = formatDateParam(currentDate) === formatDateParam(new Date())
@@ -394,245 +320,231 @@ export function AgendaClient({ appointments, patients, professionals, procedures
     router.push(`/agenda?date=${formatDateParam(d)}`)
   }
 
-  function handleDaySelect(date: string) {
-    router.push(`/agenda?date=${date}`)
-  }
-
   function openModal(profId?: string) {
     setSelectedProfId(profId)
     setModalOpen(true)
   }
 
-  async function handleStatusChange(appointmentId: string, status: string) {
-    setUpdatingId(appointmentId)
-    const result = await updateAppointmentStatus(appointmentId, status)
+  async function handleStatusChange(id: string, status: string) {
+    setUpdatingId(id)
+    const result = await updateAppointmentStatus(id, status)
     setUpdatingId(null)
     if (result?.error) toast.error(result.error)
     else toast.success('Status atualizado')
   }
 
-  const upcoming = appointments
-    .filter(a => new Date(a.start_at) > now && a.status !== 'cancelled' && a.status !== 'no_show')
-    .slice(0, 4)
+  // Sort appointments chronologically
+  const sorted = [...appointments].sort(
+    (a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime(),
+  )
 
-  // Current time line position
-  const nowHour      = now.getHours()
-  const nowMinutes   = now.getMinutes()
-  const showTimeLine = isToday && nowHour >= HOURS[0] && nowHour <= HOURS[HOURS.length - 1]
+  // Build item list with optional "Agora" divider
+  type Item = 'now-divider' | Appointment
+  const items: Item[] = []
+  let nowInserted = false
+  for (const appt of sorted) {
+    if (isToday && !nowInserted && new Date(appt.start_at) >= now) {
+      items.push('now-divider')
+      nowInserted = true
+    }
+    items.push(appt)
+  }
+
+  // Stats for header
+  const total     = appointments.length
+  const confirmed = appointments.filter(a => a.status === 'confirmed').length
+  const active    = appointments.filter(a => a.status !== 'cancelled' && a.status !== 'no_show').length
+
+  // Left sidebar: upcoming / day appointments
+  const sidebarAppts = sorted.filter(a => {
+    if (a.status === 'cancelled' || a.status === 'no_show') return false
+    return !isToday || new Date(a.start_at) > now
+  }).slice(0, 6)
 
   return (
     <>
-      <div className="flex flex-col" style={{ height: '100%' }}>
+      <div className="flex h-full overflow-hidden">
 
-        {/* ── Header ──────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-100 flex-shrink-0">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900 tracking-tight">Agenda</h1>
-            <p className="text-sm text-gray-400 mt-0.5 capitalize">
-              {currentDate.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-              {isToday && (
-                <span className="ml-2.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                  Hoje
-                </span>
+        {/* ══ LEFT SIDEBAR: Calendar + Upcoming ═══════════════════════════ */}
+        <div className="w-[340px] flex-shrink-0 border-r border-gray-100 bg-white flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-6 space-y-6">
+
+              {/* Brand header */}
+              <div>
+                <h1 className="text-xl font-bold text-gray-900 tracking-tight">Agenda</h1>
+                <p className="text-xs text-gray-400 mt-0.5">Calendário da clínica</p>
+              </div>
+
+              {/* Mini calendar */}
+              <MiniCalendar
+                selectedDate={selectedDate}
+                onSelect={date => router.push(`/agenda?date=${date}`)}
+              />
+
+              {/* Separator */}
+              <div className="h-px bg-gray-100" />
+
+              {/* Upcoming / day appointments */}
+              {sidebarAppts.length > 0 ? (
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3">
+                    {isToday ? 'Próximas consultas' : 'Consultas do dia'}
+                  </p>
+                  <div className="space-y-0.5">
+                    {sidebarAppts.map(appt => {
+                      const patient = appt.patients     as { full_name: string } | null
+                      const prof    = appt.professionals as { name: string; color: string } | null
+                      const proc    = appt.procedures   as { name: string } | null
+                      const timeStr = new Date(appt.start_at).toLocaleTimeString('pt-BR', {
+                        hour: '2-digit', minute: '2-digit',
+                      })
+                      const st = STATUS[appt.status]
+                      return (
+                        <div
+                          key={appt.id}
+                          className="flex items-center gap-3 px-2.5 py-2.5 rounded-xl hover:bg-gray-50 transition-colors cursor-default"
+                        >
+                          <div
+                            className="w-[3px] h-10 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: prof?.color ?? '#3B82F6' }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-800 truncate leading-tight">
+                              {patient?.full_name ?? '—'}
+                            </p>
+                            {proc && (
+                              <p className="text-[11px] text-gray-400 truncate mt-0.5">{proc.name}</p>
+                            )}
+                            <p className="text-[11px] font-mono text-gray-400 mt-0.5">{timeStr}</p>
+                          </div>
+                          <span className={cn('w-2 h-2 rounded-full flex-shrink-0', st?.dot ?? 'bg-gray-300')} />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-3">
+                  <p className="text-xs text-gray-400">
+                    {isToday ? 'Sem consultas pendentes hoje' : 'Sem consultas neste dia'}
+                  </p>
+                </div>
               )}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Day navigation */}
-            <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden bg-white shadow-sm">
-              <button
-                onClick={() => navigate(-1)}
-                className="px-2.5 py-2 hover:bg-gray-50 text-gray-500 hover:text-gray-900 transition-colors border-r border-gray-100">
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => router.push(`/agenda?date=${formatDateParam(new Date())}`)}
-                className="px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-                Hoje
-              </button>
-              <button
-                onClick={() => navigate(1)}
-                className="px-2.5 py-2 hover:bg-gray-50 text-gray-500 hover:text-gray-900 transition-colors border-l border-gray-100">
-                <ChevronRight className="h-4 w-4" />
-              </button>
             </div>
-
-            <Button
-              onClick={() => openModal()}
-              className="gap-2 bg-blue-600 hover:bg-blue-700 shadow-sm hover:shadow-md transition-all duration-150 hover:-translate-y-px active:translate-y-0">
-              <Plus className="h-4 w-4" />
-              Agendar
-            </Button>
           </div>
         </div>
 
-        {/* ── Body ────────────────────────────────────────────────────── */}
-        <div className="flex flex-1 overflow-hidden">
+        {/* ══ RIGHT: Day view ════════════════════════════════════════════════ */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-          {/* ── Timeline ─────────────────────────────────────────────── */}
-          <div className="flex-1 overflow-y-auto bg-white">
+          {/* Day header */}
+          <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-100 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              {/* Prev / Next */}
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={() => navigate(-1)}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors">
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => navigate(1)}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors">
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
 
-            {/* Professional quick-book pills */}
-            {professionals.length > 0 && (
-              <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-2.5 bg-white/95 border-b border-gray-50 backdrop-blur-sm">
-                <span className="text-[11px] text-gray-400 font-medium flex-shrink-0">Agendar com</span>
-                <div className="flex items-center gap-1.5 flex-wrap">
+              {/* Date + badge */}
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-lg font-bold text-gray-900 capitalize leading-tight">
+                    {currentDate.toLocaleDateString('pt-BR', {
+                      weekday: 'long', day: 'numeric', month: 'long',
+                    })}
+                  </h2>
+                  {isToday && (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                      Hoje
+                    </span>
+                  )}
+                </div>
+                {total > 0 && (
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {total} {total === 1 ? 'consulta' : 'consultas'}
+                    {active > 0 && ` · ${confirmed} confirmada${confirmed !== 1 ? 's' : ''}`}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Right actions */}
+            <div className="flex items-center gap-2">
+              {/* Quick-book pills (visible on lg+) */}
+              {professionals.length > 0 && (
+                <div className="hidden lg:flex items-center gap-1.5">
                   {professionals.map(p => (
                     <button
                       key={p.id}
                       onClick={() => openModal(p.id)}
-                      className="flex items-center gap-1.5 text-[11px] font-medium text-gray-600 hover:text-gray-900 px-2.5 py-1 rounded-full border border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm transition-all duration-150">
+                      className="flex items-center gap-1.5 text-[11px] font-medium text-gray-600 hover:text-gray-900 px-2.5 py-1.5 rounded-full border border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm transition-all duration-150">
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
                       {p.name}
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Hour rows */}
-            {HOURS.map(hour => {
-              const hourAppts  = appointments.filter(a => new Date(a.start_at).getHours() === hour)
-              const isCurrent  = showTimeLine && nowHour === hour
-              const lineOffset = (nowMinutes / 60) * HOUR_H
+              <Button
+                onClick={() => openModal()}
+                className="gap-2 bg-blue-600 hover:bg-blue-700 shadow-sm hover:shadow-md transition-all duration-150 hover:-translate-y-px active:translate-y-0">
+                <Plus className="h-4 w-4" />
+                Novo Evento
+              </Button>
+            </div>
+          </div>
 
-              return (
-                <div key={hour}
-                  className={cn('flex border-b border-gray-50 last:border-0 relative', isCurrent && 'bg-blue-50/30')}>
-                  {/* Hour label */}
-                  <div className="w-16 flex-shrink-0 text-right px-3 pt-3 select-none">
-                    <span className={cn('text-[11px] font-mono', isCurrent ? 'text-blue-500 font-semibold' : 'text-gray-300')}>
-                      {String(hour).padStart(2, '0')}:00
-                    </span>
-                  </div>
-
-                  {/* Appointments + time indicator */}
-                  <div className="flex-1 px-3 py-2 space-y-2 relative" style={{ minHeight: `${HOUR_H}px` }}>
-                    {isCurrent && (
-                      <div
-                        className="absolute left-0 right-3 flex items-center pointer-events-none z-10"
-                        style={{ top: `${Math.max(lineOffset - 4, 0)}px` }}>
-                        <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 shadow-sm" />
-                        <div className="flex-1 h-px bg-red-400 opacity-70" />
-                      </div>
-                    )}
-                    {hourAppts.map(appt => (
-                      <ApptCard key={appt.id} appt={appt} updatingId={updatingId} onStatusChange={handleStatusChange} />
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-
-            {/* Empty state */}
-            {appointments.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-24 px-8 text-center pointer-events-none">
+          {/* Appointment list */}
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-3 bg-gray-50/40">
+            {items.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-28 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center mb-5 shadow-sm">
                   <CalendarDays className="h-8 w-8 text-blue-400" />
                 </div>
                 <p className="text-base font-semibold text-gray-800 mb-1.5">
                   Nenhuma consulta agendada
                 </p>
-                <p className="text-sm text-gray-400 max-w-xs leading-relaxed">
+                <p className="text-sm text-gray-400 max-w-sm leading-relaxed">
                   Seu assistente virtual está ativo e disponível para receber novos agendamentos pelo WhatsApp.
                 </p>
                 <button
                   onClick={() => openModal()}
-                  className="pointer-events-auto mt-5 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors border border-blue-100">
+                  className="mt-5 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors border border-blue-100">
                   <Plus className="h-4 w-4" />
                   Criar agendamento
                 </button>
               </div>
-            )}
-          </div>
-
-          {/* ── Right sidebar ─────────────────────────────────────────── */}
-          <div className="w-72 flex-shrink-0 overflow-y-auto border-l border-gray-100 bg-gray-50/40 p-4 space-y-3">
-
-            {/* Mini calendar */}
-            <MiniCalendar selectedDate={selectedDate} onSelect={handleDaySelect} />
-
-            {/* Day summary */}
-            <DaySummary appointments={appointments} selectedDate={selectedDate} />
-
-            {/* Professionals */}
-            {professionals.length > 0 ? (
-              <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3.5">
-                <div className="flex items-center gap-2 mb-3">
-                  <Users className="h-3.5 w-3.5 text-gray-400" />
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Profissionais</p>
-                </div>
-                <div className="space-y-2.5">
-                  {professionals.map(prof => {
-                    const count = appointments.filter(a => {
-                      const p = a.professionals as { name: string } | null
-                      return p?.name === prof.name
-                    }).length
-                    return (
-                      <div key={prof.id} className="flex items-center gap-2.5">
-                        <div
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 shadow-sm"
-                          style={{ backgroundColor: prof.color }}>
-                          {initials(prof.name)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-gray-800 truncate">{prof.name}</p>
-                          {prof.specialty && (
-                            <p className="text-[10px] text-gray-400 truncate">{prof.specialty}</p>
-                          )}
-                        </div>
-                        <span className={cn(
-                          'text-[10px] font-semibold px-1.5 py-0.5 rounded-full tabular-nums',
-                          count > 0 ? 'bg-gray-100 text-gray-600' : 'text-gray-300',
-                        )}>
-                          {count > 0 ? count : '—'}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
             ) : (
-              <div className="rounded-xl border border-dashed border-gray-200 bg-white p-5 text-center">
-                <Users className="h-6 w-6 text-gray-300 mx-auto mb-2" />
-                <p className="text-xs text-gray-400 mb-1.5">Nenhum profissional</p>
-                <a href="/settings" className="text-xs text-blue-500 hover:text-blue-700 hover:underline transition-colors">
-                  Adicionar em Configurações →
-                </a>
-              </div>
-            )}
-
-            {/* Upcoming appointments */}
-            {upcoming.length > 0 && (
-              <div className="rounded-xl bg-white border border-gray-100 shadow-sm p-3.5">
-                <div className="flex items-center gap-2 mb-3">
-                  <Clock className="h-3.5 w-3.5 text-gray-400" />
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Próximas</p>
-                </div>
-                <div className="space-y-2.5">
-                  {upcoming.map(appt => {
-                    const patient = appt.patients     as { full_name: string } | null
-                    const prof    = appt.professionals as { name: string; color: string } | null
-                    const proc    = appt.procedures   as { name: string } | null
-                    const timeStr = new Date(appt.start_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-                    return (
-                      <div key={appt.id} className="flex items-start gap-2.5">
-                        <div
-                          className="w-1 h-10 rounded-full flex-shrink-0 mt-0.5"
-                          style={{ backgroundColor: prof?.color ?? '#3B82F6' }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-gray-800 truncate">{patient?.full_name ?? '—'}</p>
-                          {proc && <p className="text-[10px] text-gray-400 truncate">{proc.name}</p>}
-                          <p className="text-[10px] text-gray-400 tabular-nums font-mono mt-0.5">{timeStr}</p>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
+              items.map(item =>
+                item === 'now-divider' ? (
+                  <div key="now-divider" className="flex items-center gap-3 py-1">
+                    <div className="flex-1 h-px bg-red-200" />
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-red-500 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                      Agora
+                    </span>
+                    <div className="flex-1 h-px bg-red-200" />
+                  </div>
+                ) : (
+                  <BigApptCard
+                    key={(item as Appointment).id}
+                    appt={item as Appointment}
+                    updatingId={updatingId}
+                    onStatusChange={handleStatusChange}
+                  />
+                )
+              )
             )}
           </div>
         </div>
