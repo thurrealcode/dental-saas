@@ -52,16 +52,23 @@ function generateSlots(
     byDow.set(a.day_of_week, arr)
   }
 
+  // Brazil is fixed UTC-3 (no DST since 2019)
+  const BR_OFFSET_MS = 3 * 3600_000
+
   for (let dayOffset = 1; dayOffset <= DAYS_AHEAD && collected.length < need; dayOffset++) {
-    const d = new Date(now + dayOffset * 86_400_000)
-    // Get Brazil (UTC-3) calendar date + day-of-week for this UTC moment
-    const brStr = d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) // DD/MM/YYYY
-    const [dd, mm, yyyy] = brStr.split('/')
-    const dow = new Date(`${yyyy}-${mm}-${dd}T12:00:00-03:00`).getDay() // day of week in BR
+    // Shift UTC to Brazil time, then read calendar date components
+    const brDay = new Date(now - BR_OFFSET_MS + dayOffset * 86_400_000)
+    const dow = brDay.getUTCDay()
+    const yyyy = brDay.getUTCFullYear()
+    const mm = String(brDay.getUTCMonth() + 1).padStart(2, '0')
+    const dd = String(brDay.getUTCDate()).padStart(2, '0')
 
     for (const w of byDow.get(dow) ?? []) {
-      const ws = +new Date(`${yyyy}-${mm}-${dd}T${w.start_time}:00-03:00`)
-      const we = +new Date(`${yyyy}-${mm}-${dd}T${w.end_time}:00-03:00`)
+      // Supabase time columns return "HH:MM:SS" — take only "HH:MM"
+      const startHHMM = w.start_time.substring(0, 5)
+      const endHHMM = w.end_time.substring(0, 5)
+      const ws = +new Date(`${yyyy}-${mm}-${dd}T${startHHMM}:00-03:00`)
+      const we = +new Date(`${yyyy}-${mm}-${dd}T${endHHMM}:00-03:00`)
 
       for (let t = ws; t + durMs <= we; t += durMs) {
         if (t <= now) continue
