@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Building2, Users, Puzzle, Zap, MessageSquare, Bot, Stethoscope, UserCog, Lock } from 'lucide-react'
+import { Building2, Users, Puzzle, Zap, MessageSquare, Bot, Stethoscope, UserCog, Lock, CalendarClock } from 'lucide-react'
 import { ProfessionalsManager } from './professionals-manager'
 import { ProceduresManager } from './procedures-manager'
+import { AvailabilityManager } from './availability-manager'
 import { getSetupStatus } from '../setup/actions'
 import Link from 'next/link'
 import { WhatsAppConnectButton } from './whatsapp-connect-button'
@@ -32,14 +33,26 @@ export default async function SettingsPage() {
     .eq('type', 'whatsapp')
     .maybeSingle()
 
-  const [professionalsRes, proceduresRes] = await Promise.all([
+  const [professionalsRes, proceduresRes, availabilityRes] = await Promise.all([
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any).from('professionals').select('id, name, specialty, color')
-      .eq('company_id', companyId!).eq('active', true).order('name'),
+      .eq('company_id', companyId!).order('name'),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any).from('procedures').select('id, name, duration_minutes, price, color')
-      .eq('company_id', companyId!).eq('active', true).order('name'),
+      .eq('company_id', companyId!).order('name'),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).from('professional_availability').select('professional_id, day_of_week, start_time, end_time')
+      .eq('company_id', companyId!),
   ])
+
+  type ProfRow = { id: string; name: string; color: string }
+  type AvailRow = { professional_id: string; day_of_week: number; start_time: string; end_time: string }
+  const professionals = (professionalsRes.data ?? []) as ProfRow[]
+  const availability = (availabilityRes.data ?? []) as AvailRow[]
+  const professionalsWithAvail = professionals.map(p => ({
+    ...p,
+    availability: availability.filter(a => a.professional_id === p.id),
+  }))
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-4xl">
@@ -98,7 +111,25 @@ export default async function SettingsPage() {
           </div>
         </CardHeader>
         <CardContent className="pt-5">
-          <ProfessionalsManager professionals={(professionalsRes.data ?? []) as { id: string; name: string; specialty: string | null; color: string }[]} />
+          <ProfessionalsManager professionals={professionals as { id: string; name: string; specialty: string | null; color: string }[]} />
+        </CardContent>
+      </Card>
+
+      {/* Availability */}
+      <Card className="border-gray-200 bg-white shadow-sm">
+        <CardHeader className="border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-blue-50 flex items-center justify-center">
+              <CalendarClock className="h-4 w-4 text-blue-600" />
+            </div>
+            <div>
+              <CardTitle className="text-gray-900 text-base">Disponibilidade</CardTitle>
+              <CardDescription className="text-gray-400">Dias e horários de atendimento por profissional</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-5">
+          <AvailabilityManager professionals={professionalsWithAvail} />
         </CardContent>
       </Card>
 
