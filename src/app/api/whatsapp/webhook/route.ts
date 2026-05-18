@@ -706,6 +706,28 @@ async function processMessage(db: DB, session: Session, rawInput: string, clinic
     return '' // empty = don't send a reply
   }
 
+  // ── Session sanity guard ─────────────────────────────────────────────────
+  // Detect inconsistent state: a manage flow (cancel/reschedule/confirm) left
+  // lingering while the session is stuck inside a booking step. This happens
+  // when the session was not fully reset in a previous interaction. Auto-reset
+  // to menu so the user can start fresh without waiting for the TTL to expire.
+  const BOOKING_STEPS = ['procedure', 'professional', 'slot', 'confirm'] as const
+  if (session.flow !== null && BOOKING_STEPS.includes(session.step as typeof BOOKING_STEPS[number])) {
+    console.warn(`[bot] inconsistent state phone=${session.phone} step=${session.step} flow=${session.flow} — auto-reset`)
+    session.step = 'menu'; session.flow = null; session.appointment_id = null
+    session.procedure_id = null; session.professional_id = null
+    session.slot_start = null; session.slot_end = null; session.page = 0
+    return `_Sessão reiniciada._\n\n${msgMenu(clinicName, session.push_name)}`
+  }
+
+  // Global escape: typing "menu" from any active step returns to main menu
+  if (lower === 'menu' && session.step !== 'menu') {
+    session.step = 'menu'; session.flow = null; session.appointment_id = null
+    session.procedure_id = null; session.professional_id = null
+    session.slot_start = null; session.slot_end = null; session.page = 0
+    return msgMenu(clinicName, session.push_name)
+  }
+
   // Global "0" = go back
   if (lower === '0' && session.step !== 'menu') {
     return goBack(db, session, clinicName)

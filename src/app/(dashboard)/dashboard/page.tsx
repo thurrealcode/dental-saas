@@ -31,6 +31,7 @@ const STEP_LABEL: Record<string, string> = {
   manage_action:      'Gerenciando consulta',
   manage_list:        'Selecionando consulta',
   cancel_confirm:     'Confirmando cancelamento',
+  post_cancel:        'Consulta cancelada',
   reschedule_slot:    'Escolhendo novo horário',
   reschedule_confirm: 'Confirmando remarcação',
   human:              'Aguarda atendente',
