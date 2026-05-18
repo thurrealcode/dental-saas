@@ -13,6 +13,7 @@ type Step =
   | 'manage_action'        // manage: choose action (confirm/cancel/reschedule)
   | 'manage_list'          // manage: pick one of user's appointments
   | 'cancel_confirm'       // cancel: confirm the cancellation
+  | 'post_cancel'          // cancel: follow-up choice after successful cancellation
   | 'reschedule_slot'      // reschedule: pick new slot
   | 'reschedule_confirm'   // reschedule: confirm new slot
   | 'human'                // human takeover — bot is silent
@@ -499,6 +500,12 @@ async function handleCancelConfirm(db: DB, session: Session, input: string, clin
     return msgManageList(appts, session.flow)
   }
 
+  // Load appointment details BEFORE cancelling — needed for the confirmation message
+  const { data: apptData } = await db.from('appointments')
+    .select('id, title, start_at, end_at, procedure_id, professional_id, professionals(name), procedures(name, duration_minutes)')
+    .eq('id', session.appointment_id!)
+    .single()
+
   const { error } = await db.from('appointments')
     .update({ status: 'cancelled', updated_at: new Date().toISOString() })
     .eq('id', session.appointment_id!).eq('company_id', session.company_id)
@@ -507,8 +514,36 @@ async function handleCancelConfirm(db: DB, session: Session, input: string, clin
     return 'Erro ao cancelar consulta. Por favor, tente novamente.'
   }
 
-  session.step = 'menu'; session.appointment_id = null
-  return `✅ *Consulta cancelada.*\n\nSe quiser reagendar, estamos à disposição! 😊\n\n─────────────\n${msgMenu(clinicName, session.push_name)}`
+  const appt = apptData as ApptEntry | null
+  const prof  = (appt?.professionals as { name: string } | null)?.name
+  const proc  = (appt?.procedures as { name: string } | null)?.name ?? appt?.title ?? 'Consulta'
+  const date  = appt ? fmtSlot(new Date(appt.start_at)) : '—'
+
+  // Full session reset — go to post_cancel for the follow-up choice
+  session.step            = 'post_cancel'
+  session.flow            = null
+  session.appointment_id  = null
+  session.procedure_id    = null
+  session.professional_id = null
+  session.slot_start      = null
+  session.slot_end        = null
+  session.page            = 0
+
+  return (
+    `❌ *Consulta cancelada com sucesso.*\n\n` +
+    `📋 *${proc}*\n` +
+    (prof ? `👨‍⚕️ ${prof}\n` : '') +
+    `📅 ${date}\n\n` +
+    `O que deseja fazer agora?\n\n` +
+    `1 - Novo agendamento\n` +
+    `2 - Menu principal`
+  )
+}
+
+async function handlePostCancel(db: DB, session: Session, input: string, clinicName: string): Promise<string> {
+  if (input === '1') return startBooking(db, session)
+  session.step = 'menu'
+  return msgMenu(clinicName, session.push_name)
 }
 
 async function handleRescheduleSlot(db: DB, session: Session, input: string): Promise<string> {
@@ -623,6 +658,10 @@ async function goBack(db: DB, session: Session, clinicName: string): Promise<str
     session.step = 'manage_action'
     return msgManageAction()
   }
+  if (session.step === 'post_cancel') {
+    session.step = 'menu'
+    return msgMenu(clinicName, session.push_name)
+  }
   if (session.step === 'cancel_confirm' || session.step === 'reschedule_slot') {
     session.step = 'manage_list'
     const appts = await loadPatientAppointments(db, session.company_id, session.phone, ['scheduled', 'confirmed', 'in_progress'])
@@ -714,6 +753,7 @@ async function processMessage(db: DB, session: Session, rawInput: string, clinic
   if (session.step === 'manage_action')    return handleManageAction(db, session, lower, clinicName)
   if (session.step === 'manage_list')      return handleManageList(db, session, lower, clinicName)
   if (session.step === 'cancel_confirm')   return handleCancelConfirm(db, session, lower, clinicName)
+  if (session.step === 'post_cancel')      return handlePostCancel(db, session, lower, clinicName)
   if (session.step === 'reschedule_slot')  return handleRescheduleSlot(db, session, lower)
   if (session.step === 'reschedule_confirm') return handleRescheduleConfirm(db, session, lower, clinicName)
 
