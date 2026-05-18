@@ -9,6 +9,7 @@ import {
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { DashboardRefresher } from './dashboard-refresher'
+import { createServiceClient } from '@/lib/supabase/service'
 
 // ── Status palette ─────────────────────────────────────────────────────────────
 
@@ -56,6 +57,9 @@ function timeAgo(iso: string): string {
 async function fetchDashboardData(companyId: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = await createClient() as any
+  // Service client bypasses RLS — required because bot_sessions has no read policy for auth users
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const svc = createServiceClient() as any
 
   const now = new Date()
   const todayStr   = now.toISOString().slice(0, 10)
@@ -100,15 +104,15 @@ async function fetchDashboardData(companyId: string) {
     supabase.from('integrations').select('is_active, updated_at')
       .eq('company_id', companyId).eq('type', 'whatsapp').maybeSingle(),
 
-    // All sessions touched today — for total count and step breakdown
-    supabase.from('bot_sessions')
+    // All sessions touched today — use service client to bypass RLS
+    svc.from('bot_sessions')
       .select('step, push_name, phone, updated_at')
       .eq('company_id', companyId)
       .gte('updated_at', todayStart),
 
-    // Currently active sessions (not expired yet)
-    supabase.from('bot_sessions')
-      .select('phone, push_name, step, updated_at')
+    // Currently active sessions (not expired) — service client required
+    svc.from('bot_sessions')
+      .select('phone, push_name, step, flow, updated_at')
       .eq('company_id', companyId)
       .gt('expires_at', now.toISOString())
       .order('updated_at', { ascending: false })
@@ -125,7 +129,7 @@ async function fetchDashboardData(companyId: string) {
     professional_id: string | null
     professionals: { name: string; color: string } | null
   }
-  type BotSession = { phone: string; push_name: string | null; step: string; updated_at: string }
+  type BotSession = { phone: string; push_name: string | null; step: string; flow: string | null; updated_at: string }
 
   const todayAppts    = (todayApptRes.data ?? []) as Appt[]
   const weekAppts     = (weekApptRes.data ?? []) as Array<{ start_at: string; status: string }>
@@ -550,6 +554,10 @@ export default async function DashboardPage() {
                   const isBooking = ['procedure', 'professional', 'slot', 'confirm'].includes(sess.step)
                   const name      = sess.push_name ?? sess.phone
                   const stepLabel = STEP_LABEL[sess.step] ?? sess.step
+                  const flowLabel = sess.flow === 'confirm_appt' ? 'Confirmar'
+                    : sess.flow === 'cancel'      ? 'Cancelar'
+                    : sess.flow === 'reschedule'  ? 'Remarcar'
+                    : null
                   const ago       = timeAgo(sess.updated_at)
                   return (
                     <div
@@ -575,7 +583,7 @@ export default async function DashboardPage() {
                           'text-[10px] truncate',
                           isHuman ? 'text-amber-600 font-medium' : isBooking ? 'text-emerald-600' : 'text-gray-400',
                         )}>
-                          {stepLabel}
+                          {flowLabel ? `${flowLabel} · ` : ''}{stepLabel}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
