@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { DashboardRefresher } from './dashboard-refresher'
 
 // ── Status palette ─────────────────────────────────────────────────────────────
 
@@ -242,12 +243,15 @@ export default async function DashboardPage() {
             {now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
-        <Link href="/agenda">
-          <Button className="gap-2 bg-blue-600 hover:bg-blue-700 shadow-sm hover:shadow-md transition-all hover:-translate-y-px">
-            <CalendarDays className="h-4 w-4" />
-            Abrir Agenda
-          </Button>
-        </Link>
+        <div className="flex items-center gap-3">
+          <DashboardRefresher />
+          <Link href="/agenda">
+            <Button className="gap-2 bg-blue-600 hover:bg-blue-700 shadow-sm hover:shadow-md transition-all hover:-translate-y-px">
+              <CalendarDays className="h-4 w-4" />
+              Abrir Agenda
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* ── Setup banner ────────────────────────────────────────────── */}
