@@ -11,7 +11,7 @@ export async function POST() {
     }
     const { companyId, slug } = identity
     const instanceName = makeInstanceName(slug)
-    const webhookUrl = process.env.N8N_WEBHOOK_URL!
+    const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/whatsapp/webhook`
 
     // Check if integration already exists
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

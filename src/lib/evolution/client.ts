@@ -74,6 +74,35 @@ export async function deleteInstance(instanceName: string) {
   return res.json()
 }
 
+export async function sendText(instanceName: string, to: string, text: string) {
+  const res = await fetch(`${BASE_URL}/message/sendText/${instanceName}`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ number: to, text }),
+  })
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`Evolution sendText failed: ${res.status} ${body}`)
+  }
+  return res.json()
+}
+
+export async function setWebhook(instanceName: string, webhookUrl: string) {
+  const res = await fetch(`${BASE_URL}/webhook/set/${instanceName}`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({
+      url: webhookUrl,
+      byEvents: false,
+      base64: false,
+      enabled: true,
+      events: ['MESSAGES_UPSERT'],
+    }),
+  })
+  if (!res.ok) throw new Error(`Evolution setWebhook failed: ${res.status}`)
+  return res.json()
+}
+
 export function makeInstanceName(slug: string): string {
   // dental-{slug} — lowercase, alphanumeric + hyphens, max 50 chars
   const safe = slug.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 43)
