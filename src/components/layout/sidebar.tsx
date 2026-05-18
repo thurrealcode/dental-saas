@@ -8,7 +8,6 @@ import {
   Users,
   CalendarDays,
   KanbanSquare,
-  MessageSquare,
   Settings,
   Stethoscope,
   Bell,
@@ -16,7 +15,6 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
 import { signOut } from '@/lib/supabase/actions'
 
 const navItems = [
@@ -24,7 +22,6 @@ const navItems = [
   { href: '/patients',       label: 'Pacientes',      icon: Users },
   { href: '/agenda',         label: 'Agenda',         icon: CalendarDays },
   { href: '/pipeline',       label: 'Pipeline',       icon: KanbanSquare },
-  { href: '/conversations',  label: 'Conversas',      icon: MessageSquare, badge: 3 },
   { href: '/settings',       label: 'Configurações',  icon: Settings },
 ]
 
@@ -74,11 +71,6 @@ export function Sidebar({ companyName = 'Minha Clínica', userName = 'Usuário',
             >
               <item.icon className={cn('h-4 w-4 flex-shrink-0', isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600')} />
               <span className="flex-1">{item.label}</span>
-              {item.badge && (
-                <Badge className="h-5 min-w-[20px] px-1.5 text-[11px] bg-blue-600 text-white border-0">
-                  {item.badge}
-                </Badge>
-              )}
             </Link>
           )
         })}
