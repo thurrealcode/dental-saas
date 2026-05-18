@@ -296,7 +296,12 @@ function msgSlots(slots: Date[], hasMore: boolean, procName: string, profName: s
 
 function msgCancelConfirm(appt: ApptEntry) {
   const prof = (appt.professionals as { name: string } | null)?.name
-  return `Tem certeza que deseja *cancelar*?\n\n📋 *${appt.title}*${prof ? `\n👨‍⚕️ ${prof}` : ''}\n📅 ${fmtSlot(new Date(appt.start_at))}\n\n1. ✅ Sim, cancelar\n0. ❌ Não, voltar`
+  return (
+    `Deseja cancelar esta consulta?\n\n` +
+    `📋 *${appt.title}*${prof ? `\n👨‍⚕️ ${prof}` : ''}\n📅 ${fmtSlot(new Date(appt.start_at))}\n\n` +
+    `0 - ❌ Sim, cancelar\n` +
+    `1 - ✅ Manter consulta`
+  )
 }
 
 function msgRescheduleConfirm(appt: ApptEntry, newStart: Date, newEnd: Date) {
@@ -494,13 +499,19 @@ async function handleManageList(db: DB, session: Session, input: string, clinicN
 }
 
 async function handleCancelConfirm(db: DB, session: Session, input: string, clinicName: string): Promise<string> {
-  if (input !== '1') {
-    session.step = 'manage_list'
-    const appts = await loadPatientAppointments(db, session.company_id, session.phone, ['scheduled', 'confirmed', 'in_progress'])
-    return msgManageList(appts, session.flow)
+  console.log(`[bot][cancel_confirm] phone=${session.phone} flow=${session.flow} step=${session.step} input=${JSON.stringify(input)} → ${input === '0' ? 'CANCELAR' : 'MANTER'}`)
+
+  // Anything other than 0 = keep the appointment
+  if (input !== '0') {
+    console.log(`[bot][cancel_confirm] keeping appointment ${session.appointment_id}`)
+    session.step = 'menu'; session.flow = null; session.appointment_id = null
+    return `✅ *Consulta mantida.*\n\n${msgMenu(clinicName, session.push_name)}`
   }
 
-  // Load appointment details BEFORE cancelling — needed for the confirmation message
+  // 0 = confirm cancellation
+  console.log(`[bot][cancel_confirm] cancelling appointment ${session.appointment_id}`)
+
+  // Load appointment details BEFORE cancelling — needed for the success message
   const { data: apptData } = await db.from('appointments')
     .select('id, title, start_at, end_at, procedure_id, professional_id, professionals(name), procedures(name, duration_minutes)')
     .eq('id', session.appointment_id!)
@@ -510,7 +521,7 @@ async function handleCancelConfirm(db: DB, session: Session, input: string, clin
     .update({ status: 'cancelled', updated_at: new Date().toISOString() })
     .eq('id', session.appointment_id!).eq('company_id', session.company_id)
   if (error) {
-    console.error('[bot] cancel appt:', error.message, session.appointment_id)
+    console.error('[bot][cancel_confirm] DB error:', error.message, session.appointment_id)
     return 'Erro ao cancelar consulta. Por favor, tente novamente.'
   }
 
@@ -519,7 +530,7 @@ async function handleCancelConfirm(db: DB, session: Session, input: string, clin
   const proc  = (appt?.procedures as { name: string } | null)?.name ?? appt?.title ?? 'Consulta'
   const date  = appt ? fmtSlot(new Date(appt.start_at)) : '—'
 
-  // Full session reset — go to post_cancel for the follow-up choice
+  // Full session reset — post_cancel step offers rebook or main menu
   session.step            = 'post_cancel'
   session.flow            = null
   session.appointment_id  = null
@@ -529,12 +540,13 @@ async function handleCancelConfirm(db: DB, session: Session, input: string, clin
   session.slot_end        = null
   session.page            = 0
 
+  console.log(`[bot][cancel_confirm] done — step=post_cancel`)
+
   return (
     `❌ *Consulta cancelada com sucesso.*\n\n` +
     `📋 *${proc}*\n` +
     (prof ? `👨‍⚕️ ${prof}\n` : '') +
     `📅 ${date}\n\n` +
-    `O que deseja fazer agora?\n\n` +
     `1 - Novo agendamento\n` +
     `2 - Menu principal`
   )
@@ -728,8 +740,8 @@ async function processMessage(db: DB, session: Session, rawInput: string, clinic
     return msgMenu(clinicName, session.push_name)
   }
 
-  // Global "0" = go back
-  if (lower === '0' && session.step !== 'menu') {
+  // Global "0" = go back — but NOT at cancel_confirm (there 0 = confirm cancellation)
+  if (lower === '0' && session.step !== 'menu' && session.step !== 'cancel_confirm') {
     return goBack(db, session, clinicName)
   }
 
