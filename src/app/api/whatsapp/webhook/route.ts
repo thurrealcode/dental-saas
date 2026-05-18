@@ -351,6 +351,8 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
 
+    console.log('[bot] webhook received:', body.event, 'instance:', body.instance)
+
     // Only handle message events
     if (body.event !== 'messages.upsert') return NextResponse.json({ ok: true })
 
@@ -378,17 +380,18 @@ export async function POST(req: Request) {
 
     const db = createServiceClient() as DB
 
-    // Resolve company from Evolution instance name
-    const { data: integration } = await db
+    // Resolve company from Evolution instance name (ignore is_active — may be false during reconnect)
+    const { data: integration, error: integErr } = await db
       .from('integrations')
       .select('company_id, config')
       .eq('type', 'whatsapp')
-      .eq('is_active', true)
       .filter('config->>instance_name', 'eq', instanceName)
       .maybeSingle()
 
+    console.log('[bot] instance:', instanceName, 'integration:', integration?.company_id ?? null, 'err:', integErr?.message ?? null)
+
     if (!integration) {
-      console.warn('[bot] no active integration for instance:', instanceName)
+      console.warn('[bot] no integration found for instance:', instanceName)
       return NextResponse.json({ ok: true })
     }
 
