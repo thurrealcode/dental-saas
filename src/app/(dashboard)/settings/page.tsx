@@ -1,8 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Building2, Users, Puzzle, Zap, MessageSquare, Bot, Stethoscope, UserCog, Lock, CalendarClock } from 'lucide-react'
 import { ProfessionalsManager } from './professionals-manager'
@@ -11,6 +9,7 @@ import { AvailabilityManager } from './availability-manager'
 import { getSetupStatus } from '../setup/actions'
 import Link from 'next/link'
 import { WhatsAppConnectButton } from './whatsapp-connect-button'
+import { ClinicSettingsForm } from './clinic-settings-form'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -20,7 +19,7 @@ export default async function SettingsPage() {
     .from('company_members').select('company_id, role, companies(*)')
     .eq('user_id', user!.id).eq('is_active', true).single()
 
-  const company = (membership?.companies as unknown as { name: string; slug: string; email: string | null; phone: string | null } | null)
+  const company = (membership?.companies as unknown as { name: string; slug: string; email: string | null; phone: string | null; address: string | null } | null)
   const companyId = membership?.company_id
 
   const setupStatus = await getSetupStatus()
@@ -74,26 +73,14 @@ export default async function SettingsPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4 pt-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-gray-700 text-sm">Nome da Clínica</Label>
-              <Input defaultValue={company?.name} className="bg-white border-gray-200 text-gray-900 focus-visible:ring-blue-500" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-gray-700 text-sm">Slug (URL)</Label>
-              <Input defaultValue={company?.slug} className="bg-white border-gray-200 text-gray-900 focus-visible:ring-blue-500" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-gray-700 text-sm">Email</Label>
-              <Input defaultValue={company?.email ?? ''} type="email" className="bg-white border-gray-200 text-gray-900 focus-visible:ring-blue-500" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-gray-700 text-sm">Telefone</Label>
-              <Input defaultValue={company?.phone ?? ''} className="bg-white border-gray-200 text-gray-900 focus-visible:ring-blue-500" />
-            </div>
-          </div>
-          <Button className="bg-blue-600 hover:bg-blue-700 shadow-sm">Salvar alterações</Button>
+        <CardContent className="pt-5">
+          <ClinicSettingsForm
+            name={company?.name ?? ''}
+            slug={company?.slug ?? ''}
+            email={company?.email ?? ''}
+            phone={company?.phone ?? ''}
+            address={company?.address ?? ''}
+          />
         </CardContent>
       </Card>
 

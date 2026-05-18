@@ -12,12 +12,18 @@ async function getMembership() {
   return data ? { companyId: data.company_id, userId: user.id, supabase } : null
 }
 
-export async function saveClinicData(form: { name: string; phone: string; email: string }) {
+export async function saveClinicData(form: { name: string; phone: string; email: string; address: string }) {
   const m = await getMembership()
   if (!m) return { error: 'Não autenticado' }
   const { error } = await m.supabase.from('companies')
-    .update({ name: form.name.trim(), phone: form.phone.trim() || null, email: form.email.trim() || null })
+    .update({
+      name:    form.name.trim(),
+      phone:   form.phone.trim()   || null,
+      email:   form.email.trim()   || null,
+      address: form.address.trim() || null,
+    })
     .eq('id', m.companyId)
+  // If error mentions "address" column, the migration hasn't been run yet
   if (error) return { error: error.message }
   revalidatePath('/', 'layout')
   return { success: true }

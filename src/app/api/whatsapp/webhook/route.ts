@@ -10,6 +10,7 @@ type Step =
   | 'professional'         // booking: pick professional
   | 'slot'                 // booking: pick slot
   | 'confirm'              // booking: confirm new booking
+  | 'collect_name'         // booking: collect patient full name before finalising
   | 'manage_action'        // manage: choose action (confirm/cancel/reschedule)
   | 'manage_list'          // manage: pick one of user's appointments
   | 'cancel_confirm'       // cancel: confirm the cancellation
@@ -376,36 +377,46 @@ async function handleSlot(db: DB, session: Session, input: string): Promise<stri
   return `Confirmar agendamento?\n\n📋 Serviço: *${proc?.name}*\n👨‍⚕️ Profissional: *${prof?.name}*\n📅 *${fmtSlot(slotStart)}* — ${fmtTime(slotEnd)}${price}\n\n1. ✅ Confirmar\n0. ❌ Cancelar`
 }
 
-async function handleConfirm(db: DB, session: Session, input: string, clinicName: string): Promise<string> {
-  if (input !== '1') {
-    session.step = 'menu'
-    session.procedure_id = null; session.professional_id = null
-    session.slot_start = null;   session.slot_end = null
-    return `Agendamento cancelado.\n\n${msgMenu(clinicName, session.push_name)}`
-  }
+// Shared booking logic — called from handleConfirm (patient has name) and handleCollectName
+async function createBooking(db: DB, session: Session, patientName: string, clinicAddress: string | null): Promise<string> {
+  // Find or create patient, always keeping the most complete name
+  const { data: existing } = await db.from('patients')
+    .select('id, full_name')
+    .eq('company_id', session.company_id)
+    .eq('phone', session.phone)
+    .maybeSingle()
 
-  // Find or create patient
-  const { data: existing } = await db.from('patients').select('id')
-    .eq('company_id', session.company_id).eq('phone', session.phone).maybeSingle()
   let patientId: string | undefined = existing?.id
 
   if (!patientId) {
     const { data: newP, error: patErr } = await db.from('patients').insert({
       company_id: session.company_id,
-      full_name: session.push_name ?? 'Paciente WhatsApp',
-      phone: session.phone,
-      status: 'lead',
+      full_name:  patientName,
+      phone:      session.phone,
+      status:     'lead',
     }).select('id').single()
     if (patErr) {
       console.error('[bot] patient insert:', patErr.message, patErr.details)
       return 'Erro ao registrar paciente. Por favor, tente novamente.'
     }
     patientId = newP?.id
+  } else {
+    const existingName  = (existing?.full_name as string | null) ?? ''
+    const isPlaceholder = !existingName || existingName === 'Paciente WhatsApp' || existingName.trim() === '.'
+    if (isPlaceholder || existingName !== patientName) {
+      await db.from('patients')
+        .update({ full_name: patientName })
+        .eq('id', patientId).eq('company_id', session.company_id)
+      console.log(`[bot] patient name updated → ${patientName}`)
+    }
   }
+
   if (!patientId) return 'Erro ao registrar paciente. Tente novamente.'
 
   const procs = await loadProcedures(db, session.company_id)
   const proc  = procs.find(p => p.id === session.procedure_id)
+  const profs = await loadProfessionals(db, session.company_id, session.procedure_id)
+  const prof  = profs.find(p => p.id === session.professional_id)
 
   const { error: apptErr } = await db.from('appointments').insert({
     company_id:      session.company_id,
@@ -425,11 +436,64 @@ async function handleConfirm(db: DB, session: Session, input: string, clinicName
   }
 
   const displayDate = fmtSlot(new Date(session.slot_start!))
+  const priceText   = proc?.price != null ? `\n💰 R$ ${Number(proc.price).toFixed(2).replace('.', ',')}` : ''
+  const addrText    = clinicAddress ? `\n📍 ${clinicAddress}` : ''
+
+  // Reset booking state
   session.step = 'menu'
   session.procedure_id = null; session.professional_id = null
   session.slot_start = null;   session.slot_end = null
 
-  return `✅ *Agendamento confirmado!*\n\nNos vemos em *${displayDate}*! 😊\n\nEm caso de dúvidas, entre em contato.\n\n─────────────\nEnvie *menu* para mais opções.`
+  return (
+    `✅ *Agendamento confirmado!*\n\n` +
+    `👤 *${patientName}*\n` +
+    `🦷 ${proc?.name ?? 'Consulta'}\n` +
+    (prof ? `👨‍⚕️ ${prof.name}\n` : '') +
+    `📅 *${displayDate}*` +
+    priceText +
+    addrText +
+    `\n\n─────────────\nEnvie *menu* para mais opções.`
+  )
+}
+
+async function handleConfirm(db: DB, session: Session, input: string, clinicName: string, clinicAddress: string | null): Promise<string> {
+  if (input !== '1') {
+    session.step = 'menu'
+    session.procedure_id = null; session.professional_id = null
+    session.slot_start = null;   session.slot_end = null
+    return `Agendamento cancelado.\n\n${msgMenu(clinicName, session.push_name)}`
+  }
+
+  // Check if patient already has a real full name
+  const { data: existing } = await db.from('patients')
+    .select('id, full_name')
+    .eq('company_id', session.company_id).eq('phone', session.phone).maybeSingle()
+
+  const storedName  = ((existing?.full_name as string | null) ?? '').trim()
+  const hasRealName = storedName.length >= 3 && storedName !== 'Paciente WhatsApp' && storedName !== '.'
+
+  if (hasRealName) {
+    session.push_name = storedName
+    return createBooking(db, session, storedName, clinicAddress)
+  }
+
+  // Need to collect the patient's full name before finalising
+  session.step = 'collect_name'
+  return `👤 Antes de confirmar, precisamos do seu *nome completo*.\n\nQual é o seu nome?`
+}
+
+async function handleCollectName(db: DB, session: Session, input: string, clinicName: string, clinicAddress: string | null): Promise<string> {
+  const name = input.trim()
+
+  // Validate: at least 3 chars, must contain at least one letter
+  if (name.length < 3 || !/[a-zA-ZÀ-ú]/.test(name)) {
+    return `Por favor, informe seu nome completo.\n\nExemplo: *João Silva*`
+  }
+
+  // Save collected name to session (overrides WhatsApp display name)
+  session.push_name = name
+  console.log(`[bot] name collected phone=${session.phone} → ${name}`)
+  return createBooking(db, session, name, clinicAddress)
 }
 
 // ── Manage flow handlers ──────────────────────────────────────────────────────
@@ -653,6 +717,17 @@ async function goBack(db: DB, session: Session, clinicName: string): Promise<str
     session.step = 'professional'
     return msgProfessionals(await loadProfessionals(db, session.company_id, session.procedure_id))
   }
+  if (session.step === 'collect_name') {
+    // Go back to slot confirmation screen
+    session.step = 'confirm'
+    const procs2 = await loadProcedures(db, session.company_id)
+    const proc2  = procs2.find(p => p.id === session.procedure_id)
+    const profs2 = await loadProfessionals(db, session.company_id, session.procedure_id)
+    const prof2  = profs2.find(p => p.id === session.professional_id)
+    const ss = new Date(session.slot_start!), se = new Date(session.slot_end!)
+    const price2 = proc2?.price != null ? `\n💰 Valor: R$ ${Number(proc2.price).toFixed(2).replace('.', ',')}` : ''
+    return `Confirmar agendamento?\n\n📋 Serviço: *${proc2?.name}*\n👨‍⚕️ Profissional: *${prof2?.name}*\n📅 *${fmtSlot(ss)}* — ${fmtTime(se)}${price2}\n\n1. ✅ Confirmar\n0. ❌ Cancelar`
+  }
   if (session.step === 'confirm') {
     session.step = 'slot'; session.slot_start = null; session.slot_end = null; session.page = 0
     const procs = await loadProcedures(db, session.company_id)
@@ -702,7 +777,7 @@ async function goBack(db: DB, session: Session, clinicName: string): Promise<str
 
 // ── Main dispatcher ───────────────────────────────────────────────────────────
 
-async function processMessage(db: DB, session: Session, rawInput: string, clinicName: string): Promise<string> {
+async function processMessage(db: DB, session: Session, rawInput: string, clinicName: string, clinicAddress: string | null = null): Promise<string> {
   const input = rawInput.trim()
   const lower = input.toLowerCase()
 
@@ -723,7 +798,7 @@ async function processMessage(db: DB, session: Session, rawInput: string, clinic
   // lingering while the session is stuck inside a booking step. This happens
   // when the session was not fully reset in a previous interaction. Auto-reset
   // to menu so the user can start fresh without waiting for the TTL to expire.
-  const BOOKING_STEPS = ['procedure', 'professional', 'slot', 'confirm'] as const
+  const BOOKING_STEPS = ['procedure', 'professional', 'slot', 'confirm', 'collect_name'] as const
   if (session.flow !== null && BOOKING_STEPS.includes(session.step as typeof BOOKING_STEPS[number])) {
     console.warn(`[bot] inconsistent state phone=${session.phone} step=${session.step} flow=${session.flow} — auto-reset`)
     session.step = 'menu'; session.flow = null; session.appointment_id = null
@@ -781,7 +856,8 @@ async function processMessage(db: DB, session: Session, rawInput: string, clinic
   if (session.step === 'procedure')   return handleProcedure(db, session, lower)
   if (session.step === 'professional') return handleProfessional(db, session, lower)
   if (session.step === 'slot')         return handleSlot(db, session, lower)
-  if (session.step === 'confirm')      return handleConfirm(db, session, lower, clinicName)
+  if (session.step === 'confirm')      return handleConfirm(db, session, lower, clinicName, clinicAddress)
+  if (session.step === 'collect_name') return handleCollectName(db, session, input.trim(), clinicName, clinicAddress)
 
   // ── Manage ────────────────────────────────────────────────────────────────
   if (session.step === 'manage_action')    return handleManageAction(db, session, lower, clinicName)
@@ -881,12 +957,13 @@ export async function POST(req: Request) {
 
     if (pushName && !session.push_name) session.push_name = pushName
 
-    // Get clinic name
-    const { data: company } = await db.from('companies').select('name').eq('id', companyId).single()
-    const clinicName = (company?.name as string | null) ?? 'Clínica'
+    // Get clinic info (name + address for booking confirmation)
+    const { data: company } = await db.from('companies').select('name, address').eq('id', companyId).single()
+    const clinicName    = (company?.name    as string | null) ?? 'Clínica'
+    const clinicAddress = (company?.address as string | null) ?? null
 
     // Run state machine
-    const reply = await processMessage(db, session, text, clinicName)
+    const reply = await processMessage(db, session, text, clinicName, clinicAddress)
 
     // Persist session
     const expires = new Date(Date.now() + SESSION_TTL_MIN * 60_000).toISOString()
