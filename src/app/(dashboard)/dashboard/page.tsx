@@ -9,6 +9,7 @@ import {
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { DashboardRefresher } from './dashboard-refresher'
+import { DashboardDateNav } from './dashboard-date-nav'
 import { createServiceClient } from '@/lib/supabase/service'
 
 // ── Status palette ─────────────────────────────────────────────────────────────
@@ -55,7 +56,7 @@ function timeAgo(iso: string): string {
 
 // ── Data fetching ──────────────────────────────────────────────────────────────
 
-async function fetchDashboardData(companyId: string) {
+async function fetchDashboardData(companyId: string, selectedDate: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = await createClient() as any
   // Service client bypasses RLS — required because bot_sessions has no read policy for auth users
@@ -63,18 +64,21 @@ async function fetchDashboardData(companyId: string) {
   const svc = createServiceClient() as any
 
   const now = new Date()
-  const todayStr   = now.toISOString().slice(0, 10)
-  const [yr, mo, dy] = todayStr.split('-').map(Number)
-  const todayStart = new Date(yr, mo - 1, dy, 0, 0, 0).toISOString()
-  const todayEnd   = new Date(yr, mo - 1, dy, 23, 59, 59).toISOString()
-  const monthStart = new Date(yr, mo - 1, 1).toISOString()
-  const weekAgoDate = new Date(now)
-  weekAgoDate.setDate(weekAgoDate.getDate() - 6)
-  weekAgoDate.setHours(0, 0, 0, 0)
-  const weekAgoStr = weekAgoDate.toISOString()
+  const todayStr = now.toISOString().slice(0, 10)
+
+  // Selected date boundaries
+  const [sy, sm, sd] = selectedDate.split('-').map(Number)
+  const selStart = new Date(sy, sm - 1, sd, 0, 0, 0).toISOString()
+  const selEnd   = new Date(sy, sm - 1, sd, 23, 59, 59).toISOString()
+
+  // 7-day window ending at selectedDate
+  const weekAgoDate = new Date(sy, sm - 1, sd - 6, 0, 0, 0)
+  const weekAgoStr  = weekAgoDate.toISOString()
+
+  const monthStart = new Date(sy, sm - 1, 1).toISOString()
 
   const [
-    todayApptRes, weekApptRes, monthApptRes,
+    selApptRes, weekApptRes, monthApptRes,
     patientsRes, professionalsRes,
     waRes, botDayRes, activeSessionsRes,
   ] = await Promise.all([
@@ -82,14 +86,14 @@ async function fetchDashboardData(companyId: string) {
       .from('appointments')
       .select('id, title, status, start_at, end_at, patients(full_name), professionals(name, color), procedures(name)')
       .eq('company_id', companyId)
-      .gte('start_at', todayStart).lte('start_at', todayEnd)
+      .gte('start_at', selStart).lte('start_at', selEnd)
       .order('start_at'),
 
     supabase
       .from('appointments')
       .select('start_at, status')
       .eq('company_id', companyId)
-      .gte('start_at', weekAgoStr).lte('start_at', todayEnd),
+      .gte('start_at', weekAgoStr).lte('start_at', selEnd),
 
     supabase
       .from('appointments')
@@ -105,13 +109,14 @@ async function fetchDashboardData(companyId: string) {
     supabase.from('integrations').select('is_active, updated_at')
       .eq('company_id', companyId).eq('type', 'whatsapp').maybeSingle(),
 
-    // All sessions touched today — use service client to bypass RLS
+    // Sessions active on selected date
     svc.from('bot_sessions')
       .select('step, push_name, phone, updated_at')
       .eq('company_id', companyId)
-      .gte('updated_at', todayStart),
+      .gte('updated_at', selStart)
+      .lte('updated_at', selEnd),
 
-    // Currently active sessions (not expired) — service client required
+    // Currently active sessions (not expired) — always live regardless of selected date
     svc.from('bot_sessions')
       .select('phone, push_name, step, flow, updated_at')
       .eq('company_id', companyId)
@@ -132,37 +137,37 @@ async function fetchDashboardData(companyId: string) {
   }
   type BotSession = { phone: string; push_name: string | null; step: string; flow: string | null; updated_at: string }
 
-  const todayAppts    = (todayApptRes.data ?? []) as Appt[]
-  const weekAppts     = (weekApptRes.data ?? []) as Array<{ start_at: string; status: string }>
-  const monthAppts    = (monthApptRes.data ?? []) as ProfEntry[]
-  const totalPatients = patientsRes.count ?? 0
-  const professionals = (professionalsRes.data ?? []) as Array<{ id: string; name: string; color: string; specialty: string | null }>
-  const waIntegration = waRes.data as { is_active: boolean; updated_at: string } | null
-  const botDaySessions   = (botDayRes.data ?? []) as BotSession[]
-  const activeSessions   = (activeSessionsRes.data ?? []) as BotSession[]
+  const selAppts       = (selApptRes.data ?? []) as Appt[]
+  const weekAppts      = (weekApptRes.data ?? []) as Array<{ start_at: string; status: string }>
+  const monthAppts     = (monthApptRes.data ?? []) as ProfEntry[]
+  const totalPatients  = patientsRes.count ?? 0
+  const professionals  = (professionalsRes.data ?? []) as Array<{ id: string; name: string; color: string; specialty: string | null }>
+  const waIntegration  = waRes.data as { is_active: boolean; updated_at: string } | null
+  const botDaySessions = (botDayRes.data ?? []) as BotSession[]
+  const activeSessions = (activeSessionsRes.data ?? []) as BotSession[]
 
-  // Today's KPIs
-  const todayTotal     = todayAppts.length
-  const todayScheduled = todayAppts.filter(a => a.status === 'scheduled').length
-  const todayConfirmed = todayAppts.filter(a => a.status === 'confirmed').length
-  const todayInProg    = todayAppts.filter(a => a.status === 'in_progress').length
-  const todayCompleted = todayAppts.filter(a => a.status === 'completed').length
-  const todayCancelled = todayAppts.filter(a => a.status === 'cancelled').length
+  // Selected-day KPIs
+  const todayTotal     = selAppts.length
+  const todayScheduled = selAppts.filter(a => a.status === 'scheduled').length
+  const todayConfirmed = selAppts.filter(a => a.status === 'confirmed').length
+  const todayInProg    = selAppts.filter(a => a.status === 'in_progress').length
+  const todayCompleted = selAppts.filter(a => a.status === 'completed').length
+  const todayCancelled = selAppts.filter(a => a.status === 'cancelled').length
   const todayActive    = todayTotal - todayCancelled
   const confirmRate    = todayActive > 0 ? Math.round(((todayConfirmed + todayInProg + todayCompleted) / todayActive) * 100) : 0
 
   // Bot stats
-  const botToday      = botDaySessions.length
-  const activeCount   = activeSessions.length
-  const humanQueue    = activeSessions.filter(s => s.step === 'human').length
-  const botInBooking  = activeSessions.filter(s =>
+  const botToday     = botDaySessions.length
+  const activeCount  = activeSessions.length
+  const humanQueue   = activeSessions.filter(s => s.step === 'human').length
+  const botInBooking = activeSessions.filter(s =>
     ['procedure', 'professional', 'slot', 'confirm'].includes(s.step)
   ).length
 
-  // 7-day chart
+  // 7-day chart (relative to selectedDate)
   const weekData = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(now); d.setDate(d.getDate() - (6 - i)); d.setHours(0, 0, 0, 0)
-    const ds = d.toISOString().slice(0, 10)
+    const d = new Date(sy, sm - 1, sd - (6 - i))
+    const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     const dayAppts = weekAppts.filter(a => a.start_at.startsWith(ds))
     return {
       label: d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit' }),
@@ -186,8 +191,8 @@ async function fetchDashboardData(companyId: string) {
   const maxProfCount = Math.max(...profStats.map(p => p.count), 1)
 
   return {
-    now, todayStr,
-    todayAppts, todayTotal, todayScheduled, todayConfirmed,
+    now, todayStr, selectedDate,
+    selAppts, todayTotal, todayScheduled, todayConfirmed,
     todayInProg, todayCompleted, todayCancelled, todayActive, confirmRate,
     weekData, maxWeekCount, weekAppts,
     profStats, maxProfCount,
@@ -200,7 +205,11 @@ async function fetchDashboardData(companyId: string) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>
+}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -216,14 +225,19 @@ export default async function DashboardPage() {
   const companyId   = membership.company_id
   const companyName = (membership.companies as unknown as { name: string } | null)?.name ?? 'Clínica'
 
+  const params = await searchParams
+  const now = new Date()
+  const todayStr     = now.toISOString().slice(0, 10)
+  const selectedDate = params.date ?? todayStr
+  const isToday      = selectedDate === todayStr
+
   const [data, setupStatus] = await Promise.all([
-    fetchDashboardData(companyId),
+    fetchDashboardData(companyId, selectedDate),
     getSetupStatus(),
   ])
 
   const {
-    now, todayStr,
-    todayAppts, todayTotal, todayScheduled, todayConfirmed,
+    selAppts, todayTotal, todayScheduled, todayConfirmed,
     todayInProg, todayCompleted, todayCancelled, todayActive, confirmRate,
     weekData, maxWeekCount, weekAppts,
     profStats, maxProfCount,
@@ -235,6 +249,12 @@ export default async function DashboardPage() {
   const hour     = now.getHours()
   const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite'
 
+  const [sy, sm, sd] = selectedDate.split('-').map(Number)
+  const selDateObj = new Date(sy, sm - 1, sd)
+  const selectedDateFormatted = selDateObj.toLocaleDateString('pt-BR', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  })
+
   return (
     <div className="flex flex-col gap-5 p-6">
 
@@ -244,9 +264,10 @@ export default async function DashboardPage() {
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
             {greeting}, <span className="text-blue-600">{companyName}</span> 👋
           </h1>
-          <p className="text-sm text-gray-400 mt-0.5 capitalize">
-            {now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-sm text-gray-400 capitalize">{selectedDateFormatted}</p>
+            <DashboardDateNav selectedDate={selectedDate} todayStr={todayStr} />
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <DashboardRefresher />
@@ -296,11 +317,25 @@ export default async function DashboardPage() {
         </div>
       )}
 
+      {/* ── Past-date banner ────────────────────────────────────────── */}
+      {!isToday && (
+        <div className="rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-2.5 flex items-center gap-2">
+          <CalendarDays className="h-3.5 w-3.5 text-blue-400 flex-shrink-0" />
+          <p className="text-xs text-blue-600 font-medium">
+            Visualizando histórico de{' '}
+            <span className="font-bold capitalize">
+              {selDateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+            </span>
+            . O widget &quot;WhatsApp ao vivo&quot; continua mostrando sessões em tempo real.
+          </p>
+        </div>
+      )}
+
       {/* ── KPI row ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {([
           {
-            label: 'Consultas hoje', value: todayTotal,
+            label: 'Consultas do dia', value: todayTotal,
             sub: `${todayScheduled} aguardando`,
             icon: CalendarDays, iconBg: 'bg-blue-50', iconColor: 'text-blue-600',
           },
@@ -326,7 +361,7 @@ export default async function DashboardPage() {
           },
           {
             label: 'Sessões ativas', value: activeCount,
-            sub: humanQueue > 0 ? `${humanQueue} aguard. atendente` : `${botToday} conversas hoje`,
+            sub: humanQueue > 0 ? `${humanQueue} aguard. atendente` : `${botToday} conversas no dia`,
             icon: MessageSquare, iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600',
           },
         ] as const).map(card => (
@@ -355,9 +390,11 @@ export default async function DashboardPage() {
         <div className="lg:col-span-2 rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
             <div>
-              <h2 className="text-sm font-bold text-gray-900">Agenda de hoje</h2>
+              <h2 className="text-sm font-bold text-gray-900">
+                {isToday ? 'Agenda de hoje' : 'Agenda do dia'}
+              </h2>
               <p className="text-xs text-gray-400 mt-0.5">
-                {now.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })} · {todayTotal} consulta{todayTotal !== 1 ? 's' : ''}
+                {selDateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })} · {todayTotal} consulta{todayTotal !== 1 ? 's' : ''}
               </p>
             </div>
             <Link href="/agenda" className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">
@@ -365,19 +402,23 @@ export default async function DashboardPage() {
             </Link>
           </div>
 
-          {todayAppts.length === 0 ? (
+          {selAppts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center mb-4 shadow-sm">
                 <CalendarDays className="h-7 w-7 text-blue-400" />
               </div>
-              <p className="text-sm font-semibold text-gray-700 mb-1">Nenhuma consulta hoje</p>
+              <p className="text-sm font-semibold text-gray-700 mb-1">
+                {isToday ? 'Nenhuma consulta hoje' : 'Nenhuma consulta nesse dia'}
+              </p>
               <p className="text-xs text-gray-400 max-w-xs leading-relaxed">
-                O bot está ativo e pronto para receber agendamentos pelo WhatsApp.
+                {isToday
+                  ? 'O bot está ativo e pronto para receber agendamentos pelo WhatsApp.'
+                  : 'Não há registros de consultas para esta data.'}
               </p>
             </div>
           ) : (
             <div className="divide-y divide-gray-50">
-              {todayAppts.map(appt => {
+              {selAppts.map(appt => {
                 const patient = appt.patients
                 const prof    = appt.professionals
                 const proc    = appt.procedures
@@ -475,10 +516,12 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {/* Distribuição de hoje */}
+          {/* Distribuição do dia */}
           {todayTotal > 0 && (
             <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-4">
-              <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3.5">Hoje por status</h3>
+              <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3.5">
+                {isToday ? 'Hoje por status' : 'Dia por status'}
+              </h3>
               <div className="space-y-2.5">
                 {([
                   { label: 'Agendadas',    count: todayScheduled, bar: 'bg-blue-500' },
@@ -537,7 +580,9 @@ export default async function DashboardPage() {
               </div>
               <div className="bg-emerald-50 rounded-xl p-2.5 text-center">
                 <p className="text-xl font-bold text-emerald-600 tabular-nums leading-none">{botToday}</p>
-                <p className="text-[10px] text-gray-500 mt-1 leading-tight">Hoje no total</p>
+                <p className="text-[10px] text-gray-500 mt-1 leading-tight">
+                  {isToday ? 'Hoje no total' : 'No dia'}
+                </p>
               </div>
             </div>
 
@@ -546,7 +591,7 @@ export default async function DashboardPage() {
               <div className="flex flex-col items-center justify-center py-5 text-center">
                 <MessageSquare className="h-7 w-7 text-gray-200 mb-1.5" />
                 <p className="text-xs text-gray-400">Nenhuma conversa ativa agora</p>
-                <p className="text-[10px] text-gray-300 mt-0.5">{botToday} conversa{botToday !== 1 ? 's' : ''} hoje</p>
+                <p className="text-[10px] text-gray-300 mt-0.5">{botToday} conversa{botToday !== 1 ? 's' : ''} {isToday ? 'hoje' : 'nesse dia'}</p>
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -611,7 +656,9 @@ export default async function DashboardPage() {
       <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5">
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-sm font-bold text-gray-900">Consultas — últimos 7 dias</h2>
+            <h2 className="text-sm font-bold text-gray-900">
+              {isToday ? 'Consultas — últimos 7 dias' : `Consultas — 7 dias até ${selDateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`}
+            </h2>
             <p className="text-xs text-gray-400 mt-0.5">{weekAppts.length} consultas no período</p>
           </div>
           <div className="flex items-center gap-4 text-[11px] text-gray-400">
@@ -626,7 +673,8 @@ export default async function DashboardPage() {
 
         <div className="flex items-end gap-2" style={{ height: '128px' }}>
           {weekData.map(day => {
-            const isToday = day.dateStr === todayStr
+            const isSelected = day.dateStr === selectedDate
+            const isActualToday = day.dateStr === todayStr
             const barH    = maxWeekCount > 0 ? Math.max((day.total / maxWeekCount) * 100, day.total > 0 ? 8 : 0) : 0
             const canFrac = day.total > 0 ? (day.cancelled / day.total) : 0
             return (
@@ -641,7 +689,7 @@ export default async function DashboardPage() {
                   <div
                     className={cn(
                       'w-full relative rounded-t-lg overflow-hidden transition-all duration-500 group-hover:opacity-80',
-                      isToday ? 'bg-blue-500' : 'bg-blue-200',
+                      isSelected ? 'bg-blue-500' : isActualToday ? 'bg-blue-300' : 'bg-blue-200',
                     )}
                     style={{ height: `${barH}%` }}
                   >
@@ -655,7 +703,7 @@ export default async function DashboardPage() {
                 </div>
                 <p className={cn(
                   'text-[10px] font-medium whitespace-nowrap capitalize',
-                  isToday ? 'text-blue-600 font-bold' : 'text-gray-400',
+                  isSelected ? 'text-blue-600 font-bold' : isActualToday ? 'text-blue-400' : 'text-gray-400',
                 )}>
                   {day.label}
                 </p>
@@ -672,12 +720,14 @@ export default async function DashboardPage() {
         <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5">
           <div className="mb-4">
             <h2 className="text-sm font-bold text-gray-900">Profissionais mais agendados</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Este mês (excl. cancelamentos)</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {selDateObj.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} (excl. cancelamentos)
+            </p>
           </div>
           {profStats.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
               <Stethoscope className="h-8 w-8 text-gray-200 mb-2" />
-              <p className="text-xs text-gray-400">Nenhuma consulta este mês</p>
+              <p className="text-xs text-gray-400">Nenhuma consulta neste mês</p>
             </div>
           ) : (
             <div className="space-y-4">
