@@ -92,11 +92,13 @@ export async function setWebhook(instanceName: string, webhookUrl: string) {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({
-      url: webhookUrl,
-      byEvents: false,
-      base64: false,
-      enabled: true,
-      events: ['MESSAGES_UPSERT'],
+      webhook: {
+        url: webhookUrl,
+        byEvents: false,
+        base64: false,
+        enabled: true,
+        events: ['MESSAGES_UPSERT'],
+      },
     }),
   })
   if (!res.ok) throw new Error(`Evolution setWebhook failed: ${res.status}`)
