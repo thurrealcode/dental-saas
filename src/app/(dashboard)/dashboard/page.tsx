@@ -4,7 +4,7 @@ import Link from 'next/link'
 import {
   CalendarDays, Users, CheckCheck, XCircle, MessageSquare,
   Wifi, WifiOff, Bot, Stethoscope, TrendingUp, AlertCircle,
-  CheckCircle2, Circle, Clock,
+  CheckCircle2, Circle, Clock, Phone,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -20,8 +20,34 @@ const ST = {
   no_show:     { label: 'Faltou',       bg: 'bg-orange-50',  text: 'text-orange-600',  dot: 'bg-orange-400' },
 } as const
 
+const STEP_LABEL: Record<string, string> = {
+  menu:               'Menu principal',
+  procedure:          'Escolhendo procedimento',
+  professional:       'Escolhendo profissional',
+  slot:               'Vendo horários',
+  confirm:            'Confirmando consulta',
+  manage_action:      'Gerenciando consulta',
+  manage_list:        'Selecionando consulta',
+  cancel_confirm:     'Confirmando cancelamento',
+  reschedule_slot:    'Escolhendo novo horário',
+  reschedule_confirm: 'Confirmando remarcação',
+  human:              'Aguarda atendente',
+}
+
 function initials(name: string) {
-  return name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase()
+  return parts.slice(0, 2).map(n => n[0]).join('').toUpperCase()
+}
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 1) return 'agora'
+  if (mins < 60) return `${mins}min`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h`
+  return `${Math.floor(hrs / 24)}d`
 }
 
 // ── Data fetching ──────────────────────────────────────────────────────────────
@@ -31,18 +57,20 @@ async function fetchDashboardData(companyId: string) {
   const supabase = await createClient() as any
 
   const now = new Date()
-  const todayStr  = now.toISOString().slice(0, 10)
+  const todayStr   = now.toISOString().slice(0, 10)
   const [yr, mo, dy] = todayStr.split('-').map(Number)
   const todayStart = new Date(yr, mo - 1, dy, 0, 0, 0).toISOString()
   const todayEnd   = new Date(yr, mo - 1, dy, 23, 59, 59).toISOString()
   const monthStart = new Date(yr, mo - 1, 1).toISOString()
-  const weekAgoDate = new Date(now); weekAgoDate.setDate(weekAgoDate.getDate() - 6); weekAgoDate.setHours(0, 0, 0, 0)
+  const weekAgoDate = new Date(now)
+  weekAgoDate.setDate(weekAgoDate.getDate() - 6)
+  weekAgoDate.setHours(0, 0, 0, 0)
   const weekAgoStr = weekAgoDate.toISOString()
 
   const [
     todayApptRes, weekApptRes, monthApptRes,
     patientsRes, professionalsRes,
-    convoRes, waRes, botRes,
+    waRes, botDayRes, activeSessionsRes,
   ] = await Promise.all([
     supabase
       .from('appointments')
@@ -68,14 +96,22 @@ async function fetchDashboardData(companyId: string) {
 
     supabase.from('professionals').select('id, name, color, specialty').eq('company_id', companyId),
 
-    supabase.from('conversations').select('id', { count: 'exact', head: true })
-      .eq('company_id', companyId).eq('status', 'open'),
-
     supabase.from('integrations').select('is_active, updated_at')
       .eq('company_id', companyId).eq('type', 'whatsapp').maybeSingle(),
 
-    supabase.from('bot_sessions').select('step', { count: 'exact' })
-      .eq('company_id', companyId).gte('updated_at', todayStart),
+    // All sessions touched today — for total count and step breakdown
+    supabase.from('bot_sessions')
+      .select('step, push_name, phone, updated_at')
+      .eq('company_id', companyId)
+      .gte('updated_at', todayStart),
+
+    // Currently active sessions (not expired yet)
+    supabase.from('bot_sessions')
+      .select('phone, push_name, step, updated_at')
+      .eq('company_id', companyId)
+      .gt('expires_at', now.toISOString())
+      .order('updated_at', { ascending: false })
+      .limit(6),
   ])
 
   type Appt = {
@@ -88,16 +124,16 @@ async function fetchDashboardData(companyId: string) {
     professional_id: string | null
     professionals: { name: string; color: string } | null
   }
+  type BotSession = { phone: string; push_name: string | null; step: string; updated_at: string }
 
   const todayAppts    = (todayApptRes.data ?? []) as Appt[]
   const weekAppts     = (weekApptRes.data ?? []) as Array<{ start_at: string; status: string }>
   const monthAppts    = (monthApptRes.data ?? []) as ProfEntry[]
   const totalPatients = patientsRes.count ?? 0
   const professionals = (professionalsRes.data ?? []) as Array<{ id: string; name: string; color: string; specialty: string | null }>
-  const openConvos    = convoRes.count ?? 0
   const waIntegration = waRes.data as { is_active: boolean; updated_at: string } | null
-  const botSessions   = botRes.count ?? 0
-  const botHuman      = (botRes.data ?? []).filter((s: { step: string }) => s.step === 'human').length
+  const botDaySessions   = (botDayRes.data ?? []) as BotSession[]
+  const activeSessions   = (activeSessionsRes.data ?? []) as BotSession[]
 
   // Today's KPIs
   const todayTotal     = todayAppts.length
@@ -108,6 +144,14 @@ async function fetchDashboardData(companyId: string) {
   const todayCancelled = todayAppts.filter(a => a.status === 'cancelled').length
   const todayActive    = todayTotal - todayCancelled
   const confirmRate    = todayActive > 0 ? Math.round(((todayConfirmed + todayInProg + todayCompleted) / todayActive) * 100) : 0
+
+  // Bot stats
+  const botToday      = botDaySessions.length
+  const activeCount   = activeSessions.length
+  const humanQueue    = activeSessions.filter(s => s.step === 'human').length
+  const botInBooking  = activeSessions.filter(s =>
+    ['procedure', 'professional', 'slot', 'confirm'].includes(s.step)
+  ).length
 
   // 7-day chart
   const weekData = Array.from({ length: 7 }, (_, i) => {
@@ -132,7 +176,7 @@ async function fetchDashboardData(companyId: string) {
     }
     profMap.get(a.professional_id)!.count++
   }
-  const profStats = [...profMap.values()].sort((a, b) => b.count - a.count).slice(0, 6)
+  const profStats    = [...profMap.values()].sort((a, b) => b.count - a.count).slice(0, 6)
   const maxProfCount = Math.max(...profStats.map(p => p.count), 1)
 
   return {
@@ -141,12 +185,10 @@ async function fetchDashboardData(companyId: string) {
     todayInProg, todayCompleted, todayCancelled, todayActive, confirmRate,
     weekData, maxWeekCount, weekAppts,
     profStats, maxProfCount,
-    totalPatients,
-    professionals,
-    openConvos,
+    totalPatients, professionals,
     waIntegration,
     whatsappConnected: waIntegration?.is_active ?? false,
-    botSessions, botHuman,
+    botToday, activeCount, humanQueue, botInBooking, activeSessions,
   }
 }
 
@@ -179,9 +221,9 @@ export default async function DashboardPage() {
     todayInProg, todayCompleted, todayCancelled, todayActive, confirmRate,
     weekData, maxWeekCount, weekAppts,
     profStats, maxProfCount,
-    totalPatients, professionals, openConvos,
+    totalPatients, professionals,
     waIntegration, whatsappConnected,
-    botSessions, botHuman,
+    botToday, activeCount, humanQueue, botInBooking, activeSessions,
   } = data
 
   const hour     = now.getHours()
@@ -217,12 +259,12 @@ export default async function DashboardPage() {
               <p className="text-sm font-semibold text-amber-900">Configure sua clínica para ativar o bot</p>
               <div className="flex flex-wrap gap-x-5 gap-y-1.5 mt-2">
                 {[
-                  { label: 'Dados da clínica',     done: setupStatus.clinic_configured },
-                  { label: 'Procedimentos',         done: setupStatus.procedures_configured },
-                  { label: 'Profissionais',         done: setupStatus.professionals_configured },
-                  { label: 'Vínculos',              done: setupStatus.procedures_linked },
-                  { label: 'Disponibilidade',       done: setupStatus.availability_configured },
-                  { label: 'WhatsApp',              done: setupStatus.whatsapp_connected },
+                  { label: 'Dados da clínica',   done: setupStatus.clinic_configured },
+                  { label: 'Procedimentos',       done: setupStatus.procedures_configured },
+                  { label: 'Profissionais',       done: setupStatus.professionals_configured },
+                  { label: 'Vínculos',            done: setupStatus.procedures_linked },
+                  { label: 'Disponibilidade',     done: setupStatus.availability_configured },
+                  { label: 'WhatsApp',            done: setupStatus.whatsapp_connected },
                 ].map(item => (
                   <span
                     key={item.label}
@@ -249,22 +291,22 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {([
           {
-            label: 'Consultas hoje',  value: todayTotal,
+            label: 'Consultas hoje', value: todayTotal,
             sub: `${todayScheduled} aguardando`,
             icon: CalendarDays, iconBg: 'bg-blue-50', iconColor: 'text-blue-600',
           },
           {
-            label: 'Confirmadas',  value: todayConfirmed,
+            label: 'Confirmadas', value: todayConfirmed,
             sub: `${confirmRate}% de taxa`,
             icon: CheckCheck, iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600',
           },
           {
-            label: 'Canceladas',   value: todayCancelled,
+            label: 'Canceladas', value: todayCancelled,
             sub: todayTotal > 0 ? `${Math.round((todayCancelled / todayTotal) * 100)}% do total` : '—',
             icon: XCircle, iconBg: 'bg-red-50', iconColor: 'text-red-500',
           },
           {
-            label: 'Pacientes',    value: totalPatients,
+            label: 'Pacientes', value: totalPatients,
             sub: 'na base de dados',
             icon: Users, iconBg: 'bg-violet-50', iconColor: 'text-violet-600',
           },
@@ -274,9 +316,9 @@ export default async function DashboardPage() {
             icon: Stethoscope, iconBg: 'bg-amber-50', iconColor: 'text-amber-600',
           },
           {
-            label: 'Conversas',   value: openConvos,
-            sub: 'abertas no WhatsApp',
-            icon: MessageSquare, iconBg: 'bg-slate-50', iconColor: 'text-slate-600',
+            label: 'Sessões ativas', value: activeCount,
+            sub: humanQueue > 0 ? `${humanQueue} aguard. atendente` : `${botToday} conversas hoje`,
+            icon: MessageSquare, iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600',
           },
         ] as const).map(card => (
           <div
@@ -430,11 +472,11 @@ export default async function DashboardPage() {
               <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3.5">Hoje por status</h3>
               <div className="space-y-2.5">
                 {([
-                  { label: 'Agendadas',     count: todayScheduled, bar: 'bg-blue-500' },
-                  { label: 'Confirmadas',   count: todayConfirmed, bar: 'bg-emerald-500' },
-                  { label: 'Em andamento',  count: todayInProg,    bar: 'bg-amber-500' },
-                  { label: 'Concluídas',    count: todayCompleted, bar: 'bg-slate-400' },
-                  { label: 'Canceladas',    count: todayCancelled, bar: 'bg-red-400' },
+                  { label: 'Agendadas',    count: todayScheduled, bar: 'bg-blue-500' },
+                  { label: 'Confirmadas',  count: todayConfirmed, bar: 'bg-emerald-500' },
+                  { label: 'Em andamento', count: todayInProg,    bar: 'bg-amber-500' },
+                  { label: 'Concluídas',   count: todayCompleted, bar: 'bg-slate-400' },
+                  { label: 'Canceladas',   count: todayCancelled, bar: 'bg-red-400' },
                 ] as const).map(row => row.count > 0 && (
                   <div key={row.label}>
                     <div className="flex items-center justify-between mb-1">
@@ -462,20 +504,92 @@ export default async function DashboardPage() {
             </div>
           )}
 
-          {/* Bot hoje */}
+          {/* WhatsApp Ao Vivo */}
           <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-4">
-            <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3.5">Atividade do bot</h3>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: 'Sessões hoje', value: botSessions, color: 'text-blue-600', bg: 'bg-blue-50' },
-                { label: 'Atend. humano', value: botHuman,  color: 'text-amber-600', bg: 'bg-amber-50' },
-              ].map(item => (
-                <div key={item.label} className={cn('rounded-xl p-3', item.bg)}>
-                  <p className="text-[10px] text-gray-500 font-medium leading-tight">{item.label}</p>
-                  <p className={cn('text-2xl font-bold tabular-nums mt-1 leading-none', item.color)}>{item.value}</p>
-                </div>
-              ))}
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">WhatsApp Ao Vivo</h3>
+              <div className="flex items-center gap-1.5">
+                <div className={cn('w-1.5 h-1.5 rounded-full', whatsappConnected ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300')} />
+                <span className={cn('text-[10px] font-semibold', whatsappConnected ? 'text-emerald-600' : 'text-gray-400')}>
+                  {whatsappConnected ? 'Online' : 'Offline'}
+                </span>
+              </div>
             </div>
+
+            {/* 3 stat boxes */}
+            <div className="grid grid-cols-3 gap-1.5 mb-3">
+              <div className="bg-blue-50 rounded-xl p-2.5 text-center">
+                <p className="text-xl font-bold text-blue-600 tabular-nums leading-none">{activeCount}</p>
+                <p className="text-[10px] text-gray-500 mt-1 leading-tight">Ativas agora</p>
+              </div>
+              <div className={cn('rounded-xl p-2.5 text-center', humanQueue > 0 ? 'bg-amber-50' : 'bg-gray-50')}>
+                <p className={cn('text-xl font-bold tabular-nums leading-none', humanQueue > 0 ? 'text-amber-600' : 'text-gray-400')}>{humanQueue}</p>
+                <p className="text-[10px] text-gray-500 mt-1 leading-tight">Aguard. atend.</p>
+              </div>
+              <div className="bg-emerald-50 rounded-xl p-2.5 text-center">
+                <p className="text-xl font-bold text-emerald-600 tabular-nums leading-none">{botToday}</p>
+                <p className="text-[10px] text-gray-500 mt-1 leading-tight">Hoje no total</p>
+              </div>
+            </div>
+
+            {/* Active sessions list */}
+            {activeSessions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-5 text-center">
+                <MessageSquare className="h-7 w-7 text-gray-200 mb-1.5" />
+                <p className="text-xs text-gray-400">Nenhuma conversa ativa agora</p>
+                <p className="text-[10px] text-gray-300 mt-0.5">{botToday} conversa{botToday !== 1 ? 's' : ''} hoje</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {activeSessions.map(sess => {
+                  const isHuman   = sess.step === 'human'
+                  const isBooking = ['procedure', 'professional', 'slot', 'confirm'].includes(sess.step)
+                  const name      = sess.push_name ?? sess.phone
+                  const stepLabel = STEP_LABEL[sess.step] ?? sess.step
+                  const ago       = timeAgo(sess.updated_at)
+                  return (
+                    <div
+                      key={sess.phone}
+                      className={cn(
+                        'flex items-center gap-2.5 p-2 rounded-xl',
+                        isHuman
+                          ? 'bg-amber-50 border border-amber-100'
+                          : isBooking
+                            ? 'bg-emerald-50 border border-emerald-100'
+                            : 'bg-gray-50',
+                      )}
+                    >
+                      <div className={cn(
+                        'w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold',
+                        isHuman ? 'bg-amber-200 text-amber-700' : isBooking ? 'bg-emerald-200 text-emerald-700' : 'bg-blue-100 text-blue-700',
+                      )}>
+                        {initials(name)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-gray-800 truncate leading-tight">{name}</p>
+                        <p className={cn(
+                          'text-[10px] truncate',
+                          isHuman ? 'text-amber-600 font-medium' : isBooking ? 'text-emerald-600' : 'text-gray-400',
+                        )}>
+                          {stepLabel}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {isHuman && <Phone className="h-3 w-3 text-amber-500" />}
+                        <span className={cn('text-[10px] font-medium', isHuman ? 'text-amber-600' : 'text-gray-400')}>
+                          {ago}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+                {botInBooking > 0 && (
+                  <p className="text-[10px] text-emerald-600 font-medium text-center pt-1">
+                    {botInBooking} pessoa{botInBooking !== 1 ? 's' : ''} agendando agora
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -499,19 +613,17 @@ export default async function DashboardPage() {
 
         <div className="flex items-end gap-2" style={{ height: '128px' }}>
           {weekData.map(day => {
-            const isToday  = day.dateStr === todayStr
-            const barH     = maxWeekCount > 0 ? Math.max((day.total / maxWeekCount) * 100, day.total > 0 ? 8 : 0) : 0
-            const canFrac  = day.total > 0 ? (day.cancelled / day.total) : 0
+            const isToday = day.dateStr === todayStr
+            const barH    = maxWeekCount > 0 ? Math.max((day.total / maxWeekCount) * 100, day.total > 0 ? 8 : 0) : 0
+            const canFrac = day.total > 0 ? (day.cancelled / day.total) : 0
             return (
               <div key={day.dateStr} className="flex-1 flex flex-col items-center gap-1.5 group">
-                {/* Hover value */}
                 <div className={cn(
                   'text-[10px] font-bold tabular-nums transition-opacity duration-150',
                   day.total > 0 ? 'opacity-0 group-hover:opacity-100 text-gray-500' : 'opacity-0',
                 )}>
                   {day.total}
                 </div>
-                {/* Bar area */}
                 <div className="w-full flex-1 flex items-end">
                   <div
                     className={cn(
@@ -528,7 +640,6 @@ export default async function DashboardPage() {
                     )}
                   </div>
                 </div>
-                {/* Day label */}
                 <p className={cn(
                   'text-[10px] font-medium whitespace-nowrap capitalize',
                   isToday ? 'text-blue-600 font-bold' : 'text-gray-400',
@@ -541,7 +652,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Bottom row: professionals + professionals list ────────────── */}
+      {/* ── Bottom row: professionals ────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
         {/* Professional workload */}
