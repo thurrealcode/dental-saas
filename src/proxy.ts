@@ -26,7 +26,8 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   const isAuthRoute = request.nextUrl.pathname.startsWith('/auth')
-  const isPublicRoute = isAuthRoute || request.nextUrl.pathname === '/'
+  const isApiWebhook = request.nextUrl.pathname.startsWith('/api/whatsapp/webhook')
+  const isPublicRoute = isAuthRoute || request.nextUrl.pathname === '/' || isApiWebhook
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone()
