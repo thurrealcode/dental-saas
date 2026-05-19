@@ -381,6 +381,32 @@ export type Database = {
         }
         Relationships: []
       }
+      team_invites: {
+        Row: {
+          id: string
+          company_id: string
+          role: 'admin' | 'dentist' | 'receptionist'
+          token: string
+          created_by: string
+          expires_at: string
+          used_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          role: 'admin' | 'dentist' | 'receptionist'
+          token: string
+          created_by: string
+          expires_at: string
+          used_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          used_at?: string | null
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           action_url: string | null

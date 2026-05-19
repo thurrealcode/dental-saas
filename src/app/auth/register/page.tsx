@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,12 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
+  const [next, setNext] = useState('/onboarding')
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    setNext(params.get('next') ?? '/onboarding')
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -47,6 +53,9 @@ export default function RegisterPage() {
           <h2 className="text-xl font-bold text-white mb-2">Conta criada!</h2>
           <p className="text-slate-400 text-sm mb-6">
             Verifique seu email <strong className="text-white">{email}</strong> para confirmar sua conta.
+            {next !== '/onboarding' && (
+              <span className="block mt-2 text-amber-400">Após confirmar, abra o link de convite novamente.</span>
+            )}
           </p>
           <Link href="/auth/login">
             <Button className="bg-blue-600 hover:bg-blue-700 w-full">Ir para o login</Button>
