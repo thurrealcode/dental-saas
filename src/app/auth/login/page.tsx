@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -15,17 +14,13 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [next, setNext] = useState('/dashboard')
-  const router = useRouter()
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    setNext(params.get('next') ?? '/dashboard')
-  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
+
+    // Read ?next= at submit time — avoids useEffect race condition
+    const next = new URLSearchParams(window.location.search).get('next') ?? '/dashboard'
 
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -36,8 +31,8 @@ export default function LoginPage() {
       return
     }
 
-    router.push(next)
-    router.refresh()
+    // Hard navigation so the server component receives the auth cookies fresh
+    window.location.href = next
   }
 
   return (

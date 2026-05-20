@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -16,22 +16,24 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
-  const [next, setNext] = useState('/onboarding')
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    setNext(params.get('next') ?? '/onboarding')
-  }, [])
+  const [confirmedEmail, setConfirmedEmail] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
 
+    // Read ?next= at submit time
+    const next = new URLSearchParams(window.location.search).get('next') ?? '/onboarding'
+
     const supabase = createClient()
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName } },
+      options: {
+        data: { full_name: fullName },
+        // After email confirmation, Supabase redirects here — preserves the invite link
+        emailRedirectTo: window.location.origin + next,
+      },
     })
 
     if (error) {
@@ -40,6 +42,13 @@ export default function RegisterPage() {
       return
     }
 
+    // If Supabase didn't require email confirmation, session is immediately available
+    if (data.session) {
+      window.location.href = next
+      return
+    }
+
+    setConfirmedEmail(email)
     setDone(true)
   }
 
@@ -52,10 +61,8 @@ export default function RegisterPage() {
           </div>
           <h2 className="text-xl font-bold text-white mb-2">Conta criada!</h2>
           <p className="text-slate-400 text-sm mb-6">
-            Verifique seu email <strong className="text-white">{email}</strong> para confirmar sua conta.
-            {next !== '/onboarding' && (
-              <span className="block mt-2 text-amber-400">Após confirmar, abra o link de convite novamente.</span>
-            )}
+            Verifique seu email <strong className="text-white">{confirmedEmail}</strong> para confirmar sua conta.
+            O link no email vai te levar direto para entrar na clínica.
           </p>
           <Link href="/auth/login">
             <Button className="bg-blue-600 hover:bg-blue-700 w-full">Ir para o login</Button>

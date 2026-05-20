@@ -62,7 +62,7 @@ function LoginPrompt({ token, companyName, role }: { token: string; companyName:
 
             <div className="flex items-center gap-1.5 text-xs text-amber-500 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
               <Clock className="h-3.5 w-3.5 flex-shrink-0" />
-              <span>Este link expira em 7 dias</span>
+              <span>Este link expira em 7 dias · use uma vez</span>
             </div>
 
             <div className="space-y-2">
@@ -90,22 +90,22 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const svc = createServiceClient() as any
 
-  const { data: invite } = await svc
+  const { data: invite, error: fetchError } = await svc
     .from('team_invites')
     .select('*, companies(name)')
     .eq('token', token)
     .single()
 
-  if (!invite) {
+  if (fetchError || !invite) {
     return <ErrorScreen title="Convite inválido" message="Este link de convite não existe ou foi removido." />
   }
 
   if (invite.used_at) {
-    return <ErrorScreen title="Convite já usado" message="Este link de convite já foi utilizado." />
+    return <ErrorScreen title="Convite já usado" message="Este link já foi utilizado. Peça um novo link ao administrador." />
   }
 
   if (new Date(invite.expires_at) < new Date()) {
-    return <ErrorScreen title="Convite expirado" message="Este link de convite expirou. Peça um novo link ao administrador." />
+    return <ErrorScreen title="Convite expirado" message="Este link expirou. Peça um novo link ao administrador." />
   }
 
   const companyName = (invite.companies as { name: string } | null)?.name ?? 'a clínica'
@@ -118,28 +118,42 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
     return <LoginPrompt token={token} companyName={companyName} role={invite.role} />
   }
 
-  // User is authenticated — accept the invite
+  // User is authenticated — check if already a member
   const { data: existing } = await svc
     .from('company_members')
-    .select('id')
+    .select('id, is_active')
     .eq('company_id', invite.company_id)
     .eq('user_id', user.id)
     .maybeSingle()
 
-  if (!existing) {
-    await svc.from('company_members').insert({
-      company_id: invite.company_id,
-      user_id: user.id,
-      role: invite.role,
-      invited_by: invite.created_by,
-      is_active: true,
-    })
+  if (existing) {
+    // Already a member — just mark invite used and go to dashboard
+    if (!invite.used_at) {
+      await svc.from('team_invites').update({ used_at: new Date().toISOString() }).eq('id', invite.id)
+    }
+    redirect('/dashboard')
   }
 
-  await svc
-    .from('team_invites')
-    .update({ used_at: new Date().toISOString() })
-    .eq('id', invite.id)
+  // Create membership
+  const { error: insertError } = await svc.from('company_members').insert({
+    company_id: invite.company_id,
+    user_id: user.id,
+    role: invite.role,
+    invited_by: invite.created_by,
+    is_active: true,
+  })
+
+  if (insertError) {
+    return (
+      <ErrorScreen
+        title="Erro ao aceitar convite"
+        message={`Não foi possível criar o vínculo com a clínica. Detalhe: ${insertError.message}`}
+      />
+    )
+  }
+
+  // Mark invite as used
+  await svc.from('team_invites').update({ used_at: new Date().toISOString() }).eq('id', invite.id)
 
   redirect('/dashboard')
 }
