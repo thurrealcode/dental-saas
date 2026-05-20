@@ -3,7 +3,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Building2, Users, Puzzle, Zap, MessageSquare, Bot, Stethoscope, UserCog, Lock, CalendarClock, ShieldCheck } from 'lucide-react'
+import { Building2, Users, Puzzle, Zap, MessageSquare, Bot, Stethoscope, UserCog, Lock, CalendarClock } from 'lucide-react'
 import { ProfessionalsManager } from './professionals-manager'
 import { ProceduresManager } from './procedures-manager'
 import { AvailabilityManager } from './availability-manager'
@@ -12,24 +12,8 @@ import Link from 'next/link'
 import { WhatsAppConnectButton } from './whatsapp-connect-button'
 import { ClinicSettingsForm } from './clinic-settings-form'
 import { InviteButton } from './invite-button'
+import { TeamSection } from './team-section'
 
-// Role display config — maps DB enum to Portuguese label + badge style
-const ROLE_PT: Record<string, { label: string; cls: string }> = {
-  owner:        { label: 'Proprietário',  cls: 'border-amber-200  text-amber-700  bg-amber-50' },
-  admin:        { label: 'Administrador', cls: 'border-blue-200   text-blue-700   bg-blue-50' },
-  dentist:      { label: 'Profissional',  cls: 'border-emerald-200 text-emerald-700 bg-emerald-50' },
-  receptionist: { label: 'Atendente',    cls: 'border-violet-200 text-violet-700 bg-violet-50' },
-  viewer:       { label: 'Visualizador', cls: 'border-gray-200   text-gray-500   bg-gray-50' },
-}
-
-// One-line permission description per role
-const ROLE_PERMS: Record<string, string> = {
-  owner:        'Acesso total ao sistema',
-  admin:        'Acesso total ao sistema',
-  dentist:      'Agenda própria · Consultas vinculadas',
-  receptionist: 'Dashboard · Agenda · Pacientes · WhatsApp',
-  viewer:       'Acesso somente leitura',
-}
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -262,65 +246,12 @@ export default async function SettingsPage() {
         </CardHeader>
 
         <CardContent className="pt-2 pb-0">
-          {/* Member list */}
-          <div className="divide-y divide-gray-50">
-            {teamMembers.map(member => {
-              const rp = ROLE_PT[member.role] ?? { label: member.role, cls: 'border-gray-200 text-gray-500 bg-gray-50' }
-              const displayName = member.isCurrentUser
-                ? (member.fullName || user?.email || 'Você')
-                : (member.fullName || 'Usuário')
-              const subLine = member.isCurrentUser
-                ? user?.email ?? ''
-                : (ROLE_PERMS[member.role] ?? '')
-              const avatarInitial = displayName[0].toUpperCase()
-
-              return (
-                <div key={member.id} className="flex items-center justify-between py-3.5">
-                  <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 text-xs font-bold flex-shrink-0">
-                      {avatarInitial}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-gray-900">{displayName}</p>
-                        {member.isCurrentUser && (
-                          <span className="text-[10px] font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">Você</span>
-                        )}
-                      </div>
-                      {subLine && (
-                        <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{subLine}</p>
-                      )}
-                    </div>
-                  </div>
-                  <Badge variant="outline" className={`text-xs ${rp.cls}`}>{rp.label}</Badge>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Permissions legend */}
-          <div className="mt-3 mb-4 rounded-xl border border-gray-100 bg-gray-50 p-4">
-            <div className="flex items-center gap-1.5 mb-3">
-              <ShieldCheck className="h-3.5 w-3.5 text-gray-400" />
-              <h4 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Permissões por função</h4>
-            </div>
-            <div className="space-y-2">
-              {[
-                { roles: ['Proprietário', 'Administrador'], perms: 'Acesso total ao sistema' },
-                { roles: ['Atendente'],                     perms: 'Dashboard · Agenda · Pacientes · WhatsApp ao vivo' },
-                { roles: ['Profissional'],                  perms: 'Agenda própria · Consultas vinculadas' },
-              ].map(row => (
-                <div key={row.roles[0]} className="flex items-start gap-3">
-                  <div className="flex gap-1 flex-shrink-0 w-52">
-                    {row.roles.map(r => (
-                      <span key={r} className="text-[11px] font-semibold text-gray-600">{r}{row.roles.indexOf(r) < row.roles.length - 1 ? ' ·' : ''}</span>
-                    ))}
-                  </div>
-                  <span className="text-[11px] text-gray-400 leading-relaxed">{row.perms}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <TeamSection
+            members={teamMembers}
+            currentUserRole={membership?.role ?? 'viewer'}
+            currentUserId={user!.id}
+            currentUserEmail={user?.email ?? ''}
+          />
         </CardContent>
       </Card>
     </div>

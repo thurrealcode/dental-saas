@@ -3,9 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 
-type InviteRole = 'admin' | 'dentist' | 'receptionist'
-
-export async function generateInvite(role: InviteRole) {
+export async function generateInvite() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado' }
@@ -27,7 +25,7 @@ export async function generateInvite(role: InviteRole) {
   const svc = createServiceClient() as any
   const { error } = await svc.from('team_invites').insert({
     company_id: membership.company_id,
-    role,
+    role: 'receptionist',
     token,
     created_by: user.id,
     expires_at: expiresAt,

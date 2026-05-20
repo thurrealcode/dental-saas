@@ -25,6 +25,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const companyName = (membership.companies as unknown as { name: string } | null)?.name ?? 'Minha Clínica'
   const userName = profile?.full_name ?? user.email?.split('@')[0] ?? 'Usuário'
+  const userRole = membership.role as string
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
@@ -32,6 +33,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         companyName={companyName}
         userName={userName}
         userEmail={user.email ?? ''}
+        userRole={userRole}
       />
       <main className="flex-1 overflow-y-auto bg-gray-50">
         {children}

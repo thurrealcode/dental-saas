@@ -17,22 +17,30 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { signOut } from '@/lib/supabase/actions'
 
-const navItems = [
-  { href: '/dashboard',      label: 'Dashboard',     icon: LayoutDashboard },
-  { href: '/patients',       label: 'Pacientes',      icon: Users },
-  { href: '/agenda',         label: 'Agenda',         icon: CalendarDays },
-  { href: '/pipeline',       label: 'Pipeline',       icon: KanbanSquare },
-  { href: '/settings',       label: 'Configurações',  icon: Settings },
+const ALL_NAV = [
+  { href: '/dashboard', label: 'Dashboard',    icon: LayoutDashboard, roles: ['owner', 'admin', 'receptionist', 'dentist', 'viewer'] },
+  { href: '/patients',  label: 'Pacientes',    icon: Users,           roles: ['owner', 'admin', 'receptionist', 'viewer'] },
+  { href: '/agenda',    label: 'Agenda',       icon: CalendarDays,    roles: ['owner', 'admin', 'receptionist', 'dentist', 'viewer'] },
+  { href: '/pipeline',  label: 'Pipeline',     icon: KanbanSquare,    roles: ['owner', 'admin'] },
+  { href: '/settings',  label: 'Configurações', icon: Settings,        roles: ['owner', 'admin'] },
 ]
 
 interface SidebarProps {
   companyName?: string
   userName?: string
   userEmail?: string
+  userRole?: string
 }
 
-export function Sidebar({ companyName = 'Minha Clínica', userName = 'Usuário', userEmail = '' }: SidebarProps) {
+export function Sidebar({
+  companyName = 'Minha Clínica',
+  userName = 'Usuário',
+  userEmail = '',
+  userRole = 'viewer',
+}: SidebarProps) {
   const pathname = usePathname()
+
+  const navItems = ALL_NAV.filter(item => item.roles.includes(userRole))
 
   const initials = userName
     .split(' ')
