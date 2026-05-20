@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface Props {
   selectedDate: string // YYYY-MM-DD
@@ -16,7 +17,7 @@ function addDays(dateStr: string, days: number): string {
 }
 
 export function DashboardDateNav({ selectedDate, todayStr }: Props) {
-  const router = useRouter()
+  const router  = useRouter()
   const isToday = selectedDate === todayStr
 
   function navigate(days: number) {
@@ -29,7 +30,10 @@ export function DashboardDateNav({ selectedDate, todayStr }: Props) {
       <button
         onClick={() => navigate(-1)}
         title="Dia anterior"
-        className="h-7 w-7 rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center justify-center text-gray-400 hover:text-gray-700 transition-colors"
+        className={cn(
+          'h-6 w-6 rounded-md flex items-center justify-center transition-all duration-150',
+          'text-gray-400 hover:text-gray-700 hover:bg-gray-100 active:scale-95',
+        )}
       >
         <ChevronLeft className="h-3.5 w-3.5" />
       </button>
@@ -37,7 +41,10 @@ export function DashboardDateNav({ selectedDate, todayStr }: Props) {
       {!isToday && (
         <button
           onClick={() => router.push('/dashboard')}
-          className="h-7 px-2.5 rounded-lg border border-blue-200 bg-blue-50 text-[11px] font-semibold text-blue-600 hover:bg-blue-100 transition-colors"
+          className={cn(
+            'h-6 px-2 rounded-md text-[10px] font-semibold transition-all duration-150 active:scale-95',
+            'bg-blue-600 text-white hover:bg-blue-700 shadow-sm',
+          )}
         >
           Hoje
         </button>
@@ -46,7 +53,10 @@ export function DashboardDateNav({ selectedDate, todayStr }: Props) {
       <button
         onClick={() => navigate(1)}
         title="Próximo dia"
-        className="h-7 w-7 rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center justify-center text-gray-400 hover:text-gray-700 transition-colors"
+        className={cn(
+          'h-6 w-6 rounded-md flex items-center justify-center transition-all duration-150',
+          'text-gray-400 hover:text-gray-700 hover:bg-gray-100 active:scale-95',
+        )}
       >
         <ChevronRight className="h-3.5 w-3.5" />
       </button>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 const INTERVAL_S = 10
 
@@ -10,7 +11,7 @@ export function DashboardRefresher() {
   const router = useRouter()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sec, setSec] = useState(INTERVAL_S)
-  const secRef = useRef(INTERVAL_S)
+  const secRef  = useRef(INTERVAL_S)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function triggerRefresh() {
@@ -43,10 +44,17 @@ export function DashboardRefresher() {
     <button
       onClick={triggerRefresh}
       title="Clique para atualizar agora"
-      className="flex items-center gap-1.5 text-[11px] font-medium text-gray-400 hover:text-blue-600 transition-colors px-2.5 py-1.5 rounded-lg hover:bg-blue-50"
+      className={cn(
+        'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-150',
+        'border border-gray-200/80 bg-white shadow-sm hover:border-gray-300 hover:shadow active:scale-95',
+        isRefreshing ? 'text-blue-600' : 'text-gray-500 hover:text-gray-800',
+      )}
     >
       <RefreshCw
-        className={`h-3 w-3 flex-shrink-0 transition-transform ${isRefreshing ? 'animate-spin text-blue-500' : ''}`}
+        className={cn(
+          'h-3 w-3 flex-shrink-0 transition-all',
+          isRefreshing ? 'animate-spin text-blue-500' : 'text-gray-400',
+        )}
       />
       <span className="tabular-nums">
         {isRefreshing ? 'Atualizando…' : `Ao vivo · ${sec}s`}

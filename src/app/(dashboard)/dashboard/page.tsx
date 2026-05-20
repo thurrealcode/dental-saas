@@ -4,7 +4,7 @@ import Link from 'next/link'
 import {
   CalendarDays, Users, CheckCheck, XCircle, MessageSquare,
   Wifi, WifiOff, Bot, Stethoscope, TrendingUp, AlertCircle,
-  CheckCircle2, Circle, Clock, Phone,
+  CheckCircle2, Circle, Clock, Phone, ChevronRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -64,7 +64,6 @@ async function fetchDashboardData(companyId: string, selectedDate: string) {
   const svc = createServiceClient() as any
 
   const now = new Date()
-  const todayStr = now.toISOString().slice(0, 10)
 
   // Selected date boundaries
   const [sy, sm, sd] = selectedDate.split('-').map(Number)
@@ -191,7 +190,7 @@ async function fetchDashboardData(companyId: string, selectedDate: string) {
   const maxProfCount = Math.max(...profStats.map(p => p.count), 1)
 
   return {
-    now, todayStr, selectedDate,
+    now, selectedDate,
     selAppts, todayTotal, todayScheduled, todayConfirmed,
     todayInProg, todayCompleted, todayCancelled, todayActive, confirmRate,
     weekData, maxWeekCount, weekAppts,
@@ -256,23 +255,26 @@ export default async function DashboardPage({
   })
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="flex flex-col gap-5 p-6 bg-[#f7f8fa] min-h-full">
 
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-            {greeting}, <span className="text-blue-600">{companyName}</span> 👋
+          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-[0.1em] mb-1.5">
+            {greeting}
+          </p>
+          <h1 className="text-[26px] font-bold tracking-tight text-gray-950 leading-none">
+            {companyName}
           </h1>
-          <div className="flex items-center gap-2 mt-1">
-            <p className="text-sm text-gray-400 capitalize">{selectedDateFormatted}</p>
+          <div className="flex items-center gap-2 mt-2.5">
+            <p className="text-sm text-gray-500 capitalize">{selectedDateFormatted}</p>
             <DashboardDateNav selectedDate={selectedDate} todayStr={todayStr} />
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <DashboardRefresher />
           <Link href="/agenda">
-            <Button className="gap-2 bg-blue-600 hover:bg-blue-700 shadow-sm hover:shadow-md transition-all hover:-translate-y-px">
+            <Button className="gap-2 bg-gray-950 hover:bg-gray-800 text-white shadow-sm font-medium h-9 px-4 text-sm rounded-lg border-0 transition-all">
               <CalendarDays className="h-4 w-4" />
               Abrir Agenda
             </Button>
@@ -282,12 +284,14 @@ export default async function DashboardPage({
 
       {/* ── Setup banner ────────────────────────────────────────────── */}
       {setupStatus && !setupStatus.is_ready && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+        <div className="rounded-xl border border-amber-200/80 bg-amber-50 p-4">
           <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+            </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-amber-900">Configure sua clínica para ativar o bot</p>
-              <div className="flex flex-wrap gap-x-5 gap-y-1.5 mt-2">
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2.5">
                 {[
                   { label: 'Dados da clínica',   done: setupStatus.clinic_configured },
                   { label: 'Procedimentos',       done: setupStatus.procedures_configured },
@@ -302,7 +306,7 @@ export default async function DashboardPage({
                   >
                     {item.done
                       ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
-                      : <Circle className="h-3.5 w-3.5 text-amber-300 flex-shrink-0" />}
+                      : <Circle className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" />}
                     {item.label}
                   </span>
                 ))}
@@ -319,7 +323,7 @@ export default async function DashboardPage({
 
       {/* ── Past-date banner ────────────────────────────────────────── */}
       {!isToday && (
-        <div className="rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-2.5 flex items-center gap-2">
+        <div className="rounded-xl border border-blue-100 bg-blue-50/40 px-4 py-2.5 flex items-center gap-2">
           <CalendarDays className="h-3.5 w-3.5 text-blue-400 flex-shrink-0" />
           <p className="text-xs text-blue-600 font-medium">
             Visualizando histórico de{' '}
@@ -337,48 +341,46 @@ export default async function DashboardPage({
           {
             label: 'Consultas do dia', value: todayTotal,
             sub: `${todayScheduled} aguardando`,
-            icon: CalendarDays, iconBg: 'bg-blue-50', iconColor: 'text-blue-600',
+            icon: CalendarDays, iconColor: 'text-blue-500', accent: 'bg-blue-500',
           },
           {
             label: 'Confirmadas', value: todayConfirmed,
             sub: `${confirmRate}% de taxa`,
-            icon: CheckCheck, iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600',
+            icon: CheckCheck, iconColor: 'text-emerald-500', accent: 'bg-emerald-500',
           },
           {
             label: 'Canceladas', value: todayCancelled,
             sub: todayTotal > 0 ? `${Math.round((todayCancelled / todayTotal) * 100)}% do total` : '—',
-            icon: XCircle, iconBg: 'bg-red-50', iconColor: 'text-red-500',
+            icon: XCircle, iconColor: 'text-red-400', accent: 'bg-red-400',
           },
           {
             label: 'Pacientes', value: totalPatients,
             sub: 'na base de dados',
-            icon: Users, iconBg: 'bg-violet-50', iconColor: 'text-violet-600',
+            icon: Users, iconColor: 'text-violet-500', accent: 'bg-violet-500',
           },
           {
             label: 'Profissionais', value: professionals.length,
             sub: 'cadastrados',
-            icon: Stethoscope, iconBg: 'bg-amber-50', iconColor: 'text-amber-600',
+            icon: Stethoscope, iconColor: 'text-amber-500', accent: 'bg-amber-500',
           },
           {
             label: 'Sessões ativas', value: activeCount,
             sub: humanQueue > 0 ? `${humanQueue} aguard. atendente` : `${botToday} conversas no dia`,
-            icon: MessageSquare, iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600',
+            icon: MessageSquare, iconColor: 'text-teal-500', accent: 'bg-teal-500',
           },
         ] as const).map(card => (
           <div
             key={card.label}
-            className="rounded-2xl bg-white border border-gray-100 shadow-sm p-4 flex flex-col gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+            className="relative rounded-xl bg-white border border-gray-200/60 shadow-sm pl-5 pr-4 py-4 flex flex-col gap-2.5 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group"
           >
+            {/* Left accent strip */}
+            <div className={cn('absolute left-0 top-0 bottom-0 w-[3px]', card.accent)} />
             <div className="flex items-center justify-between">
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide leading-none">{card.label}</p>
-              <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0', card.iconBg)}>
-                <card.icon className={cn('h-3.5 w-3.5', card.iconColor)} />
-              </div>
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest leading-none">{card.label}</p>
+              <card.icon className={cn('h-4 w-4 flex-shrink-0 opacity-40 group-hover:opacity-80 transition-opacity duration-200', card.iconColor)} />
             </div>
-            <div>
-              <p className="text-3xl font-bold text-gray-900 tabular-nums leading-none">{card.value}</p>
-              <p className="text-[11px] text-gray-400 mt-1.5">{card.sub}</p>
-            </div>
+            <p className="text-[32px] font-bold tracking-tight text-gray-950 tabular-nums leading-none">{card.value}</p>
+            <p className="text-[11px] text-gray-500 leading-none">{card.sub}</p>
           </div>
         ))}
       </div>
@@ -387,37 +389,54 @@ export default async function DashboardPage({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
         {/* Agenda do dia */}
-        <div className="lg:col-span-2 rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+        <div className="lg:col-span-2 rounded-xl bg-white border border-gray-200/60 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <div>
               <h2 className="text-sm font-bold text-gray-900">
                 {isToday ? 'Agenda de hoje' : 'Agenda do dia'}
               </h2>
               <p className="text-xs text-gray-400 mt-0.5">
-                {selDateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })} · {todayTotal} consulta{todayTotal !== 1 ? 's' : ''}
+                {selDateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}
+                {' · '}
+                <span className="tabular-nums">{todayTotal}</span> consulta{todayTotal !== 1 ? 's' : ''}
               </p>
             </div>
-            <Link href="/agenda" className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">
-              Ver agenda completa →
+            <Link href="/agenda" className="inline-flex items-center gap-0.5 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">
+              Ver completa
+              <ChevronRight className="h-3.5 w-3.5" />
             </Link>
           </div>
 
           {selAppts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center mb-4 shadow-sm">
-                <CalendarDays className="h-7 w-7 text-blue-400" />
+              <div className="relative mb-5">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center shadow-sm">
+                  <CalendarDays className="h-7 w-7 text-blue-400" />
+                </div>
+                {isToday && whatsappConnected && (
+                  <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-400 border-2 border-white flex items-center justify-center">
+                    <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                  </div>
+                )}
               </div>
-              <p className="text-sm font-semibold text-gray-700 mb-1">
+              <p className="text-sm font-semibold text-gray-800 mb-1.5">
                 {isToday ? 'Nenhuma consulta hoje' : 'Nenhuma consulta nesse dia'}
               </p>
-              <p className="text-xs text-gray-400 max-w-xs leading-relaxed">
+              <p className="text-xs text-gray-400 max-w-xs leading-relaxed mb-5">
                 {isToday
                   ? 'O bot está ativo e pronto para receber agendamentos pelo WhatsApp.'
                   : 'Não há registros de consultas para esta data.'}
               </p>
+              {isToday && (
+                <Link href="/agenda">
+                  <button className="text-xs font-semibold text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg transition-colors">
+                    Abrir agenda completa →
+                  </button>
+                </Link>
+              )}
             </div>
           ) : (
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-gray-50/80">
               {selAppts.map(appt => {
                 const patient = appt.patients
                 const prof    = appt.professionals
@@ -428,13 +447,13 @@ export default async function DashboardPage({
                 return (
                   <div key={appt.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/60 transition-colors">
                     {/* Time */}
-                    <div className="w-20 flex-shrink-0">
-                      <span className="text-xs font-mono font-semibold text-gray-700 tabular-nums">{time}</span>
-                      <span className="text-[10px] text-gray-400 ml-0.5">– {timeEnd}</span>
+                    <div className="w-[60px] flex-shrink-0">
+                      <p className="text-xs font-mono font-bold text-gray-800 tabular-nums">{time}</p>
+                      <p className="text-[10px] text-gray-400 tabular-nums mt-0.5">{timeEnd}</p>
                     </div>
-                    {/* Prof color bar */}
+                    {/* Prof color strip */}
                     <div
-                      className="w-[3px] h-9 rounded-full flex-shrink-0"
+                      className="w-0.5 h-9 rounded-full flex-shrink-0"
                       style={{ backgroundColor: prof?.color ?? '#3B82F6' }}
                     />
                     {/* Patient + procedure */}
@@ -462,51 +481,58 @@ export default async function DashboardPage({
         </div>
 
         {/* Right column */}
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
 
-          {/* Status operacional */}
-          <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-4">
-            <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3.5">Status operacional</h3>
-            <div className="space-y-3">
+          {/* Status do sistema */}
+          <div className="rounded-xl bg-white border border-gray-200/60 shadow-sm p-4">
+            <h3 className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-3.5">Status do sistema</h3>
+            <div className="space-y-2">
               {[
                 {
                   label: 'WhatsApp',
+                  desc: whatsappConnected ? 'Conectado' : 'Desconectado',
                   ok: whatsappConnected,
-                  okText: 'Conectado',
-                  failText: 'Desconectado',
                   Icon: whatsappConnected ? Wifi : WifiOff,
                 },
                 {
                   label: 'Bot de atendimento',
+                  desc: (setupStatus?.is_ready ?? false) ? 'Ativo' : 'Inativo',
                   ok: setupStatus?.is_ready ?? false,
-                  okText: 'Ativo',
-                  failText: 'Inativo',
                   Icon: Bot,
                 },
                 {
                   label: 'Integração',
+                  desc: waIntegration !== null ? 'Configurada' : 'Não configurada',
                   ok: waIntegration !== null,
-                  okText: 'Configurada',
-                  failText: 'Não configurada',
                   Icon: TrendingUp,
                 },
               ].map(item => (
-                <div key={item.label} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <item.Icon className={cn('h-3.5 w-3.5 flex-shrink-0', item.ok ? 'text-emerald-500' : 'text-gray-300')} />
-                    <span className="text-xs text-gray-600">{item.label}</span>
+                <div
+                  key={item.label}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors',
+                    item.ok ? 'bg-emerald-50/50 border-emerald-100/70' : 'bg-gray-50/60 border-gray-100',
+                  )}
+                >
+                  <div className={cn(
+                    'w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0',
+                    item.ok ? 'bg-emerald-100' : 'bg-gray-100',
+                  )}>
+                    <item.Icon className={cn('h-3.5 w-3.5', item.ok ? 'text-emerald-600' : 'text-gray-400')} />
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className={cn('w-1.5 h-1.5 rounded-full', item.ok ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300')} />
-                    <span className={cn('text-[11px] font-semibold', item.ok ? 'text-emerald-600' : 'text-gray-400')}>
-                      {item.ok ? item.okText : item.failText}
-                    </span>
-                  </div>
+                  <span className="text-xs font-medium text-gray-700 flex-1 min-w-0 truncate">{item.label}</span>
+                  <span className={cn(
+                    'inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0',
+                    item.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400',
+                  )}>
+                    <span className={cn('w-1.5 h-1.5 rounded-full', item.ok ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300')} />
+                    {item.desc}
+                  </span>
                 </div>
               ))}
 
               {waIntegration?.updated_at && (
-                <p className="text-[10px] text-gray-300 flex items-center gap-1 pt-1 border-t border-gray-50">
+                <p className="text-[10px] text-gray-300 flex items-center gap-1 pt-1">
                   <Clock className="h-3 w-3" />
                   Sync: {new Date(waIntegration.updated_at).toLocaleString('pt-BR', {
                     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
@@ -518,8 +544,8 @@ export default async function DashboardPage({
 
           {/* Distribuição do dia */}
           {todayTotal > 0 && (
-            <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-4">
-              <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3.5">
+            <div className="rounded-xl bg-white border border-gray-200/60 shadow-sm p-4">
+              <h3 className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-3.5">
                 {isToday ? 'Hoje por status' : 'Dia por status'}
               </h3>
               <div className="space-y-2.5">
@@ -533,11 +559,11 @@ export default async function DashboardPage({
                   <div key={row.label}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[11px] text-gray-500">{row.label}</span>
-                      <span className="text-[11px] font-bold text-gray-800 tabular-nums">{row.count}</span>
+                      <span className="text-[11px] font-bold text-gray-900 tabular-nums">{row.count}</span>
                     </div>
                     <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                       <div
-                        className={cn('h-full rounded-full', row.bar)}
+                        className={cn('h-full rounded-full transition-all duration-700', row.bar)}
                         style={{ width: `${Math.round((row.count / todayTotal) * 100)}%` }}
                       />
                     </div>
@@ -557,130 +583,161 @@ export default async function DashboardPage({
           )}
 
           {/* WhatsApp Ao Vivo */}
-          <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">WhatsApp Ao Vivo</h3>
+          <div className="rounded-xl bg-white border border-gray-200/60 shadow-sm overflow-hidden">
+            {/* Dark header */}
+            <div className="flex items-center justify-between px-4 py-3 bg-gray-950">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-3.5 w-3.5 text-white/60" />
+                <h3 className="text-xs font-semibold text-white tracking-wide">WhatsApp ao vivo</h3>
+              </div>
               <div className="flex items-center gap-1.5">
-                <div className={cn('w-1.5 h-1.5 rounded-full', whatsappConnected ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300')} />
-                <span className={cn('text-[10px] font-semibold', whatsappConnected ? 'text-emerald-600' : 'text-gray-400')}>
+                <div className={cn('w-1.5 h-1.5 rounded-full', whatsappConnected ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600')} />
+                <span className={cn('text-[10px] font-semibold', whatsappConnected ? 'text-emerald-400' : 'text-gray-500')}>
                   {whatsappConnected ? 'Online' : 'Offline'}
                 </span>
               </div>
             </div>
 
-            {/* 3 stat boxes */}
-            <div className="grid grid-cols-3 gap-1.5 mb-3">
-              <div className="bg-blue-50 rounded-xl p-2.5 text-center">
-                <p className="text-xl font-bold text-blue-600 tabular-nums leading-none">{activeCount}</p>
-                <p className="text-[10px] text-gray-500 mt-1 leading-tight">Ativas agora</p>
-              </div>
-              <div className={cn('rounded-xl p-2.5 text-center', humanQueue > 0 ? 'bg-amber-50' : 'bg-gray-50')}>
-                <p className={cn('text-xl font-bold tabular-nums leading-none', humanQueue > 0 ? 'text-amber-600' : 'text-gray-400')}>{humanQueue}</p>
-                <p className="text-[10px] text-gray-500 mt-1 leading-tight">Aguard. atend.</p>
-              </div>
-              <div className="bg-emerald-50 rounded-xl p-2.5 text-center">
-                <p className="text-xl font-bold text-emerald-600 tabular-nums leading-none">{botToday}</p>
-                <p className="text-[10px] text-gray-500 mt-1 leading-tight">
-                  {isToday ? 'Hoje no total' : 'No dia'}
-                </p>
-              </div>
-            </div>
-
-            {/* Active sessions list */}
-            {activeSessions.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-5 text-center">
-                <MessageSquare className="h-7 w-7 text-gray-200 mb-1.5" />
-                <p className="text-xs text-gray-400">Nenhuma conversa ativa agora</p>
-                <p className="text-[10px] text-gray-300 mt-0.5">{botToday} conversa{botToday !== 1 ? 's' : ''} {isToday ? 'hoje' : 'nesse dia'}</p>
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                {activeSessions.map(sess => {
-                  const isHuman   = sess.step === 'human'
-                  const isBooking = ['procedure', 'professional', 'slot', 'confirm'].includes(sess.step)
-                  const name      = sess.push_name ?? sess.phone
-                  const stepLabel = STEP_LABEL[sess.step] ?? sess.step
-                  const flowLabel = sess.flow === 'confirm_appt' ? 'Confirmar'
-                    : sess.flow === 'cancel'      ? 'Cancelar'
-                    : sess.flow === 'reschedule'  ? 'Remarcar'
-                    : null
-                  const ago       = timeAgo(sess.updated_at)
-                  return (
-                    <div
-                      key={sess.phone}
-                      className={cn(
-                        'flex items-center gap-2.5 p-2 rounded-xl',
-                        isHuman
-                          ? 'bg-amber-50 border border-amber-100'
-                          : isBooking
-                            ? 'bg-emerald-50 border border-emerald-100'
-                            : 'bg-gray-50',
-                      )}
-                    >
-                      <div className={cn(
-                        'w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold',
-                        isHuman ? 'bg-amber-200 text-amber-700' : isBooking ? 'bg-emerald-200 text-emerald-700' : 'bg-blue-100 text-blue-700',
-                      )}>
-                        {initials(name)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-gray-800 truncate leading-tight">{name}</p>
-                        <p className={cn(
-                          'text-[10px] truncate',
-                          isHuman ? 'text-amber-600 font-medium' : isBooking ? 'text-emerald-600' : 'text-gray-400',
-                        )}>
-                          {flowLabel ? `${flowLabel} · ` : ''}{stepLabel}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        {isHuman && <Phone className="h-3 w-3 text-amber-500" />}
-                        <span className={cn('text-[10px] font-medium', isHuman ? 'text-amber-600' : 'text-gray-400')}>
-                          {ago}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })}
-                {botInBooking > 0 && (
-                  <p className="text-[10px] text-emerald-600 font-medium text-center pt-1">
-                    {botInBooking} pessoa{botInBooking !== 1 ? 's' : ''} agendando agora
+            <div className="p-4">
+              {/* 3 stat pills */}
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="flex flex-col items-center bg-blue-50 border border-blue-100/60 rounded-xl py-3">
+                  <p className="text-xl font-bold text-blue-600 tabular-nums leading-none">{activeCount}</p>
+                  <p className="text-[9px] font-semibold text-blue-400 uppercase tracking-wide mt-1.5">Ativas</p>
+                </div>
+                <div className={cn(
+                  'flex flex-col items-center border rounded-xl py-3',
+                  humanQueue > 0 ? 'bg-amber-50 border-amber-100/60' : 'bg-gray-50 border-gray-100',
+                )}>
+                  <p className={cn('text-xl font-bold tabular-nums leading-none', humanQueue > 0 ? 'text-amber-600' : 'text-gray-400')}>{humanQueue}</p>
+                  <p className={cn('text-[9px] font-semibold uppercase tracking-wide mt-1.5', humanQueue > 0 ? 'text-amber-400' : 'text-gray-400')}>Aguardando</p>
+                </div>
+                <div className="flex flex-col items-center bg-emerald-50 border border-emerald-100/60 rounded-xl py-3">
+                  <p className="text-xl font-bold text-emerald-600 tabular-nums leading-none">{botToday}</p>
+                  <p className="text-[9px] font-semibold text-emerald-400 uppercase tracking-wide mt-1.5">
+                    {isToday ? 'Hoje' : 'No dia'}
                   </p>
-                )}
+                </div>
               </div>
-            )}
+
+              {/* Active sessions list */}
+              {activeSessions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-5 text-center">
+                  <div className="w-10 h-10 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center mb-2">
+                    <MessageSquare className="h-4 w-4 text-gray-300" />
+                  </div>
+                  <p className="text-xs font-medium text-gray-500">Nenhuma conversa ativa</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5 tabular-nums">
+                    {botToday} conversa{botToday !== 1 ? 's' : ''} {isToday ? 'hoje' : 'nesse dia'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {activeSessions.map(sess => {
+                    const isHuman   = sess.step === 'human'
+                    const isBooking = ['procedure', 'professional', 'slot', 'confirm'].includes(sess.step)
+                    const name      = sess.push_name ?? sess.phone
+                    const stepLabel = STEP_LABEL[sess.step] ?? sess.step
+                    const flowLabel = sess.flow === 'confirm_appt' ? 'Confirmar'
+                      : sess.flow === 'cancel'      ? 'Cancelar'
+                      : sess.flow === 'reschedule'  ? 'Remarcar'
+                      : null
+                    const ago = timeAgo(sess.updated_at)
+                    return (
+                      <div
+                        key={sess.phone}
+                        className={cn(
+                          'relative flex items-center gap-2.5 pl-4 pr-3 py-2.5 rounded-xl overflow-hidden',
+                          isHuman
+                            ? 'bg-amber-50/80 border border-amber-100'
+                            : isBooking
+                              ? 'bg-emerald-50/80 border border-emerald-100'
+                              : 'bg-gray-50/80 border border-gray-100',
+                        )}
+                      >
+                        {/* Left accent strip */}
+                        <div className={cn(
+                          'absolute left-0 top-0 bottom-0 w-[3px]',
+                          isHuman ? 'bg-amber-400' : isBooking ? 'bg-emerald-400' : 'bg-blue-300',
+                        )} />
+                        <div className={cn(
+                          'w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold',
+                          isHuman
+                            ? 'bg-amber-200 text-amber-700'
+                            : isBooking
+                              ? 'bg-emerald-200 text-emerald-700'
+                              : 'bg-blue-100 text-blue-700',
+                        )}>
+                          {initials(name)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-gray-800 truncate leading-tight">{name}</p>
+                          <p className={cn(
+                            'text-[10px] truncate mt-0.5',
+                            isHuman ? 'text-amber-600 font-medium' : isBooking ? 'text-emerald-600' : 'text-gray-400',
+                          )}>
+                            {flowLabel ? `${flowLabel} · ` : ''}{stepLabel}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {isHuman && <Phone className="h-3 w-3 text-amber-500" />}
+                          <span className={cn('text-[10px] font-medium tabular-nums', isHuman ? 'text-amber-600' : 'text-gray-400')}>
+                            {ago}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {botInBooking > 0 && (
+                    <div className="flex items-center justify-center gap-1.5 py-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <p className="text-[10px] text-emerald-600 font-semibold">
+                        {botInBooking} pessoa{botInBooking !== 1 ? 's' : ''} agendando agora
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       {/* ── 7-day bar chart ──────────────────────────────────────────── */}
-      <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5">
+      <div className="rounded-xl bg-white border border-gray-200/60 shadow-sm p-5">
         <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="text-sm font-bold text-gray-900">
-              {isToday ? 'Consultas — últimos 7 dias' : `Consultas — 7 dias até ${selDateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`}
+              {isToday
+                ? 'Consultas — últimos 7 dias'
+                : `Consultas — 7 dias até ${selDateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`}
             </h2>
-            <p className="text-xs text-gray-400 mt-0.5">{weekAppts.length} consultas no período</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              <span className="tabular-nums">{weekAppts.length}</span> consultas no período
+            </p>
           </div>
           <div className="flex items-center gap-4 text-[11px] text-gray-400">
             <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-blue-500" /> Total
+              <span className="w-2.5 h-2.5 rounded-sm bg-blue-500/80" />
+              Total
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-red-400" /> Canceladas
+              <span className="w-2.5 h-2.5 rounded-sm bg-red-400/70" />
+              Canceladas
             </span>
           </div>
         </div>
 
-        <div className="flex items-end gap-2" style={{ height: '128px' }}>
+        <div className="flex items-end gap-2" style={{ height: '120px' }}>
           {weekData.map(day => {
-            const isSelected = day.dateStr === selectedDate
+            const isSelected    = day.dateStr === selectedDate
             const isActualToday = day.dateStr === todayStr
             const barH    = maxWeekCount > 0 ? Math.max((day.total / maxWeekCount) * 100, day.total > 0 ? 8 : 0) : 0
             const canFrac = day.total > 0 ? (day.cancelled / day.total) : 0
             return (
               <div key={day.dateStr} className="flex-1 flex flex-col items-center gap-1.5 group">
                 <div className={cn(
-                  'text-[10px] font-bold tabular-nums transition-opacity duration-150',
+                  'text-[10px] font-bold tabular-nums transition-all duration-150',
                   day.total > 0 ? 'opacity-0 group-hover:opacity-100 text-gray-500' : 'opacity-0',
                 )}>
                   {day.total}
@@ -688,14 +745,14 @@ export default async function DashboardPage({
                 <div className="w-full flex-1 flex items-end">
                   <div
                     className={cn(
-                      'w-full relative rounded-t-lg overflow-hidden transition-all duration-500 group-hover:opacity-80',
-                      isSelected ? 'bg-blue-500' : isActualToday ? 'bg-blue-300' : 'bg-blue-200',
+                      'w-full relative rounded-t-md overflow-hidden transition-all duration-500 group-hover:brightness-95',
+                      isSelected ? 'bg-blue-600' : isActualToday ? 'bg-blue-400' : 'bg-blue-200',
                     )}
                     style={{ height: `${barH}%` }}
                   >
                     {canFrac > 0 && (
                       <div
-                        className="absolute bottom-0 left-0 right-0 bg-red-400"
+                        className="absolute bottom-0 left-0 right-0 bg-red-400/80"
                         style={{ height: `${canFrac * 100}%` }}
                       />
                     )}
@@ -717,25 +774,27 @@ export default async function DashboardPage({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
         {/* Professional workload */}
-        <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5">
+        <div className="rounded-xl bg-white border border-gray-200/60 shadow-sm p-5">
           <div className="mb-4">
             <h2 className="text-sm font-bold text-gray-900">Profissionais mais agendados</h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              {selDateObj.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} (excl. cancelamentos)
+              {selDateObj.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} · excl. cancelamentos
             </p>
           </div>
           {profStats.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
-              <Stethoscope className="h-8 w-8 text-gray-200 mb-2" />
+              <div className="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center mb-3">
+                <Stethoscope className="h-5 w-5 text-gray-300" />
+              </div>
               <p className="text-xs text-gray-400">Nenhuma consulta neste mês</p>
             </div>
           ) : (
             <div className="space-y-4">
               {profStats.map((prof, idx) => (
                 <div key={prof.name} className="flex items-center gap-3">
-                  <span className="text-[11px] font-mono text-gray-300 w-4 flex-shrink-0">{idx + 1}</span>
+                  <span className="text-[11px] font-mono text-gray-300 w-4 flex-shrink-0 text-right">{idx + 1}</span>
                   <div
-                    className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold shadow-sm"
+                    className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold shadow-sm"
                     style={{ backgroundColor: prof.color }}
                   >
                     {initials(prof.name)}
@@ -744,7 +803,7 @@ export default async function DashboardPage({
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-xs font-semibold text-gray-700 truncate">{prof.name}</span>
                       <span className="text-xs font-bold text-gray-900 tabular-nums ml-2 flex-shrink-0">
-                        {prof.count} consulta{prof.count !== 1 ? 's' : ''}
+                        {prof.count}
                       </span>
                     </div>
                     <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -764,28 +823,33 @@ export default async function DashboardPage({
         </div>
 
         {/* Professionals directory */}
-        <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5">
+        <div className="rounded-xl bg-white border border-gray-200/60 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-sm font-bold text-gray-900">Equipe</h2>
-              <p className="text-xs text-gray-400 mt-0.5">{professionals.length} profissional{professionals.length !== 1 ? 'is' : ''} cadastrado{professionals.length !== 1 ? 's' : ''}</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                <span className="tabular-nums">{professionals.length}</span> profissional{professionals.length !== 1 ? 'is' : ''} cadastrado{professionals.length !== 1 ? 's' : ''}
+              </p>
             </div>
-            <Link href="/settings" className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">
-              Gerenciar →
+            <Link href="/settings" className="inline-flex items-center gap-0.5 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">
+              Gerenciar
+              <ChevronRight className="h-3.5 w-3.5" />
             </Link>
           </div>
           {professionals.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
-              <Users className="h-8 w-8 text-gray-200 mb-2" />
+              <div className="w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center mb-3">
+                <Users className="h-5 w-5 text-gray-300" />
+              </div>
               <p className="text-xs text-gray-400 mb-2">Nenhum profissional cadastrado</p>
               <Link href="/settings" className="text-xs text-blue-500 hover:underline">Adicionar em Configurações →</Link>
             </div>
           ) : (
-            <div className="space-y-2.5">
+            <div className="space-y-1">
               {professionals.map(prof => {
                 const monthCount = profStats.find(p => p.name === prof.name)?.count ?? 0
                 return (
-                  <div key={prof.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 transition-colors">
+                  <div key={prof.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors">
                     <div
                       className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold shadow-sm"
                       style={{ backgroundColor: prof.color }}
@@ -799,7 +863,7 @@ export default async function DashboardPage({
                       )}
                     </div>
                     {monthCount > 0 && (
-                      <span className="text-[11px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full tabular-nums flex-shrink-0">
+                      <span className="text-[11px] font-semibold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full tabular-nums flex-shrink-0">
                         {monthCount} mês
                       </span>
                     )}
