@@ -163,16 +163,44 @@ async function loadProcedures(db: DB, companyId: string): Promise<Procedure[]> {
   return (data as Procedure[]) ?? []
 }
 
+// Deduplicates by normalised name — used only when displaying the list to patients.
+// Keeps the first occurrence per name so the stored procedure_id always resolves back.
+function dedupProcedures(procs: Procedure[]): Procedure[] {
+  const seen = new Set<string>()
+  return procs.filter(p => {
+    const key = p.name.trim().toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 async function loadProfessionals(db: DB, companyId: string, procedureId?: string | null): Promise<Professional[]> {
-  // Try to load only professionals linked to this procedure
   if (procedureId) {
+    // Resolve the procedure name so we can find ALL procedures with the same name.
+    // This handles the case where two professionals each have a separate row in
+    // `procedures` for the same service (e.g. both have "Limpeza" but different IDs).
+    const { data: thisProcData } = await db
+      .from('procedures').select('name')
+      .eq('company_id', companyId).eq('id', procedureId).maybeSingle()
+
+    let procIds: string[] = [procedureId]
+    if (thisProcData?.name) {
+      const { data: siblings } = await db
+        .from('procedures').select('id')
+        .eq('company_id', companyId)
+        .ilike('name', (thisProcData.name as string).trim())
+      if (siblings?.length) procIds = (siblings as { id: string }[]).map(p => p.id)
+    }
+
     const { data: links, error: linkErr } = await db
       .from('professional_procedures')
       .select('professional_id')
       .eq('company_id', companyId)
-      .eq('procedure_id', procedureId)
+      .in('procedure_id', procIds)
+
     if (!linkErr) {
-      const ids = (links as { professional_id: string }[] | null)?.map(l => l.professional_id) ?? []
+      const ids = [...new Set((links as { professional_id: string }[] | null)?.map(l => l.professional_id) ?? [])]
       if (ids.length > 0) {
         const { data } = await db
           .from('professionals').select('id, name, specialty')
@@ -272,6 +300,9 @@ function msgManageList(appts: ApptEntry[], flow: ManageFlow) {
   return `${header}\n\n${lines}\n\nDigite o número ou *0* para voltar.`
 }
 
+// Sentinel used to offer "any professional" as the last choice in the list.
+const ANY_PROF: Professional = { id: '__any__', name: 'Qualquer profissional disponível', specialty: null }
+
 function msgProcedures(procs: Procedure[]) {
   if (!procs.length) return `Não há procedimentos disponíveis no momento.\n\n0. Voltar`
   const lines = procs.map((p, i) => {
@@ -283,7 +314,8 @@ function msgProcedures(procs: Procedure[]) {
 
 function msgProfessionals(profs: Professional[]) {
   if (!profs.length) return `Não há profissionais disponíveis para este procedimento.\n\n0. Voltar`
-  const lines = profs.map((p, i) => `${i + 1}. ${p.name}${p.specialty ? ` (${p.specialty})` : ''}`).join('\n')
+  const withAny = [...profs, ANY_PROF]
+  const lines = withAny.map((p, i) => `${i + 1}. ${p.name}${p.specialty ? ` (${p.specialty})` : ''}`).join('\n')
   return `Escolha o profissional:\n\n${lines}\n\n0. Voltar`
 }
 
@@ -319,12 +351,12 @@ async function startBooking(db: DB, session: Session): Promise<string> {
   session.slot_start = null
   session.slot_end = null
   session.page = 0
-  const procs = await loadProcedures(db, session.company_id)
+  const procs = dedupProcedures(await loadProcedures(db, session.company_id))
   return msgProcedures(procs)
 }
 
 async function handleProcedure(db: DB, session: Session, input: string): Promise<string> {
-  const procs = await loadProcedures(db, session.company_id)
+  const procs = dedupProcedures(await loadProcedures(db, session.company_id))
   const idx = parseInt(input) - 1
   if (isNaN(idx) || idx < 0 || idx >= procs.length) return `Opção inválida.\n\n${msgProcedures(procs)}`
   session.procedure_id = procs[idx].id
@@ -334,16 +366,42 @@ async function handleProcedure(db: DB, session: Session, input: string): Promise
 }
 
 async function handleProfessional(db: DB, session: Session, input: string): Promise<string> {
-  const profs = await loadProfessionals(db, session.company_id, session.procedure_id)
+  const profs  = await loadProfessionals(db, session.company_id, session.procedure_id)
+  const withAny = [...profs, ANY_PROF]
   const idx = parseInt(input) - 1
-  if (isNaN(idx) || idx < 0 || idx >= profs.length) return `Opção inválida.\n\n${msgProfessionals(profs)}`
-  session.professional_id = profs[idx].id
-  session.step = 'slot'
-  session.page = 0
+  if (isNaN(idx) || idx < 0 || idx >= withAny.length) return `Opção inválida.\n\n${msgProfessionals(profs)}`
+
+  const selected = withAny[idx]
   const procs = await loadProcedures(db, session.company_id)
   const proc  = procs.find(p => p.id === session.procedure_id)
-  const { slots, hasMore } = await loadAvailableSlots(db, session.company_id, session.professional_id, proc?.duration_minutes ?? 30, 0)
-  return msgSlots(slots, hasMore, proc?.name ?? '', profs[idx].name, 0)
+  const dur   = proc?.duration_minutes ?? 30
+
+  // "Qualquer profissional disponível" — pick the one with the earliest free slot
+  if (selected.id === ANY_PROF.id) {
+    let bestProf: Professional | null = null
+    let bestSlot: Date | null = null
+    for (const prof of profs) {
+      const { slots } = await loadAvailableSlots(db, session.company_id, prof.id, dur, 0)
+      if (slots.length > 0 && (!bestSlot || slots[0] < bestSlot)) {
+        bestSlot = slots[0]
+        bestProf = prof
+      }
+    }
+    if (!bestProf) {
+      return `Não há horários disponíveis com nenhum profissional nos próximos ${DAYS_AHEAD} dias.\n\n0. Voltar`
+    }
+    session.professional_id = bestProf.id
+    session.step = 'slot'
+    session.page = 0
+    const { slots, hasMore } = await loadAvailableSlots(db, session.company_id, bestProf.id, dur, 0)
+    return msgSlots(slots, hasMore, proc?.name ?? '', bestProf.name, 0)
+  }
+
+  session.professional_id = selected.id
+  session.step = 'slot'
+  session.page = 0
+  const { slots, hasMore } = await loadAvailableSlots(db, session.company_id, session.professional_id, dur, 0)
+  return msgSlots(slots, hasMore, proc?.name ?? '', selected.name, 0)
 }
 
 async function handleSlot(db: DB, session: Session, input: string): Promise<string> {
@@ -711,7 +769,7 @@ async function goBack(db: DB, session: Session, clinicName: string): Promise<str
   }
   if (session.step === 'professional') {
     session.step = 'procedure'
-    return msgProcedures(await loadProcedures(db, session.company_id))
+    return msgProcedures(dedupProcedures(await loadProcedures(db, session.company_id)))
   }
   if (session.step === 'slot') {
     session.step = 'professional'
