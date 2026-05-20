@@ -65,6 +65,7 @@ type DB = any
 const SLOTS_PER_PAGE  = 5
 const DAYS_AHEAD      = 14
 const SESSION_TTL_MIN = 60
+const MIN_LEAD_MIN    = 30  // minimum minutes from now before a slot can be offered
 
 const PERIOD_LABELS: Record<Period, string> = {
   morning:   '☀️ Manhã (06h–11h)',
@@ -119,9 +120,11 @@ function generateSlots(
 
   // Brazil is fixed UTC-3 (no DST since 2019)
   const BR_OFFSET_MS = 3 * 3600_000
+  // Slots must start at least MIN_LEAD_MIN minutes from now so the clinic has time to prepare
+  const leadMs = MIN_LEAD_MIN * 60_000
 
-  // For period-filtered queries we must scan ALL 14 days first (morning slots
-  // on day 1 must not crowd out afternoon/evening slots on the same day).
+  // For period-filtered queries we must scan ALL days first (morning slots
+  // on day 0 must not crowd out afternoon/evening slots on the same day).
   // For 'any'/null we use the original early-stop strategy to stay fast.
   const usePeriodFilter = period && period !== 'any'
   const earlyStop = !usePeriodFilter
@@ -130,7 +133,9 @@ function generateSlots(
   let occupiedCount  = 0
   const matched: Date[] = []
 
-  for (let dayOffset = 1; dayOffset <= DAYS_AHEAD; dayOffset++) {
+  // dayOffset=0 = today; dayOffset=DAYS_AHEAD-1 = last day of the window.
+  // Including today ensures the bot shows the same available slots as the CRM.
+  for (let dayOffset = 0; dayOffset < DAYS_AHEAD; dayOffset++) {
     if (earlyStop && matched.length >= (page + 1) * SLOTS_PER_PAGE + 1) break
 
     const brDay = new Date(now - BR_OFFSET_MS + dayOffset * 86_400_000)
@@ -146,7 +151,7 @@ function generateSlots(
       const we = +new Date(`${yyyy}-${mm}-${dd}T${endHHMM}:00-03:00`)
 
       for (let t = ws; t + durMs <= we; t += durMs) {
-        if (t <= now) continue
+        if (t < now + leadMs) continue  // skip slots too close to now
         totalGenerated++
         const clash = bookedRanges.some(([bs, be]) => t < be && t + durMs > bs)
         if (clash) { occupiedCount++; continue }
@@ -278,6 +283,13 @@ async function loadAvailableSlots(
     .eq('company_id', companyId)
   if (availErr) console.error('[bot] availability:', availErr.message)
 
+  const availRows = (avail as Availability[]) ?? []
+  if (availRows.length === 0) {
+    console.warn(`[bot][slots] prof=${professionalId} — NO availability configured in CRM. Configure in Settings → Disponibilidade.`)
+  } else {
+    console.log(`[bot][slots] prof=${professionalId} — availability: ${availRows.map(a => `dow${a.day_of_week}(${a.start_time.substring(0,5)}-${a.end_time.substring(0,5)})`).join(', ')}`)
+  }
+
   const horizon = new Date(Date.now() + DAYS_AHEAD * 86_400_000).toISOString()
   const { data: booked, error: bookedErr } = await db
     .from('appointments')
@@ -290,7 +302,7 @@ async function loadAvailableSlots(
   if (bookedErr) console.error('[bot] booked slots:', bookedErr.message)
 
   const result = generateSlots(
-    (avail as Availability[]) ?? [],
+    availRows,
     (booked as BookedSlot[]) ?? [],
     durationMin,
     period,
