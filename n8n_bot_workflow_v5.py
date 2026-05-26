@@ -270,7 +270,7 @@ if (step === 'sel_proc') {
   sessionData.procedure_duration = procs[idx].duration_minutes || 30;
   step = 'sel_prof';
   return sb('GET_PROFESSIONALS',
-    `${SURL}/rest/v1/professionals?company_id=eq.${sessionData.company_id}&active=eq.true&select=id,name,specialty&order=name.asc`);
+    `${SURL}/rest/v1/professionals?company_id=eq.${sessionData.company_id}&active=eq.true&professional_availability.active=eq.true&select=id,name,specialty,professional_availability!inner(id)&order=name.asc`);
 }
 
 // ── SEL_PROF ─────────────────────────────────────────────────────
@@ -296,7 +296,7 @@ if (step === 'period') {
     const profs = sessionData.professionals || [];
     if (!profs.length) {
       return sb('GET_PROFESSIONALS',
-        `${SURL}/rest/v1/professionals?company_id=eq.${sessionData.company_id}&active=eq.true&select=id,name,specialty&order=name.asc`);
+        `${SURL}/rest/v1/professionals?company_id=eq.${sessionData.company_id}&active=eq.true&professional_availability.active=eq.true&select=id,name,specialty,professional_availability!inner(id)&order=name.asc`);
     }
     const list = profs.map((p,i) => `${i+1}️⃣ *${p.name}*${p.specialty ? ` — _${p.specialty}_` : ''}`).join('\n');
     return direct(`Tudo bem 😊\nCom qual profissional prefere?\n\n${list}`);
@@ -572,8 +572,9 @@ switch (action) {
       step = 'menu';
       return out('Hmm, no momento não há profissionais disponíveis 😅\nTente novamente mais tarde ou entre em contato com a recepção.');
     }
-    sessionData.professionals = data;
-    const lista = data.map((p,i) => `${i+1}️⃣ *${p.name}*${p.specialty ? ` — _${p.specialty}_` : ''}`).join('\n');
+    // Remove campo de join (professional_availability) antes de salvar na sessão
+    sessionData.professionals = data.map(({ professional_availability, ...p }) => p);
+    const lista = sessionData.professionals.map((p,i) => `${i+1}️⃣ *${p.name}*${p.specialty ? ` — _${p.specialty}_` : ''}`).join('\n');
     return out(`Perfeito 😊\nCom qual profissional você prefere ser atendido(a)?\n\n${lista}\n\n_Responda com o número_`);
   }
 
